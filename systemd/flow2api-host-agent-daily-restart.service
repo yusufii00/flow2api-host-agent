@@ -1,0 +1,6 @@
+[Unit]
+Description=Flow2API Host Agent - daily maintenance restart
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart flow2api-host-agent-browser.service flow2api-host-agent.service flow2api-host-agent-ui.service

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Flow2API Host Agent daily maintenance restart
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=flow2api-host-agent-daily-restart.service
+
+[Install]
+WantedBy=timers.target

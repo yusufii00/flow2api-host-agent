@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow2API Host Agent</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#09111f;--panel:#101a2f;--card:#0f1729;--line:#20304b;--text:#e5edf8;--muted:#8ea0bd;--blue:#4f8cff;--blue2:#2b6fff;--green:#22c55e;--red:#ef4444;--amber:#f59e0b}
+    html,body{min-height:100%}
+    body{font-family:Inter,system-ui,-apple-system,sans-serif;background:linear-gradient(180deg,#08101d 0%,#0b1325 100%);color:var(--text);line-height:1.6}
+    a{text-decoration:none;color:inherit}
+    .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+    .sidebar{background:rgba(9,15,28,.88);backdrop-filter:blur(12px);border-right:1px solid var(--line);padding:24px 14px;position:sticky;top:0;height:100vh}
+    .brand{padding:4px 10px 18px;border-bottom:1px solid var(--line);margin-bottom:14px}
+    .brand h1{font-size:18px;font-weight:800;letter-spacing:.2px}
+    .brand p{font-size:12px;color:var(--muted);margin-top:4px}
+    .nav{display:flex;flex-direction:column;gap:6px}
+    .nav button{appearance:none;border:none;background:transparent;color:var(--muted);padding:11px 12px;border-radius:12px;text-align:left;cursor:pointer;font-size:14px;font-weight:600;transition:.18s}
+    .nav button:hover{background:#12203a;color:var(--text)}
+    .nav button.active{background:linear-gradient(180deg,#14305d,#102645);color:#dbe8ff;box-shadow:inset 0 0 0 1px #264a7a}
+    .side-meta{margin-top:18px;padding:14px 12px;border:1px solid var(--line);border-radius:14px;background:#0c1628;font-size:12px;color:var(--muted)}
+    .main{padding:28px 28px 40px}
+    .page{display:none;max-width:1120px}.page.active{display:block}
+    .hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+    .hero h2{font-size:28px;line-height:1.2;margin-bottom:8px}
+    .hero p{color:var(--muted);font-size:14px;max-width:760px}
+    .hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;border-radius:12px;border:1px solid transparent;font-size:14px;font-weight:700;cursor:pointer;transition:.18s;min-height:44px}
+    .btn-primary{background:linear-gradient(180deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 8px 24px rgba(43,111,255,.25)}
+    .btn-primary:hover{filter:brightness(1.05)}
+    .btn-secondary{background:#101f39;color:#dce8ff;border-color:#27436d}
+    .btn-secondary:hover{background:#122647}
+    .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}
+    .stat{background:linear-gradient(180deg,#101a2f,#0d1528);border:1px solid var(--line);border-radius:16px;padding:16px}
+    .stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .stat .value{font-size:22px;font-weight:800;margin-top:8px}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block;margin-right:8px}.ok{background:var(--green)}.bad{background:var(--red)}
+    .grid{display:grid;grid-template-columns:1.3fr .9fr;gap:16px}
+    .panel{background:linear-gradient(180deg,#10192c,#0c1426);border:1px solid var(--line);border-radius:18px;padding:18px}
+    .panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:14px}
+    .codebox{background:#0a1222;border:1px solid #1c2d4a;border-radius:14px;padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#bdd0f6;white-space:pre-wrap;word-break:break-word}
+    .banner{border-radius:16px;padding:14px 16px;margin-bottom:14px;border:1px solid}.b-info{background:#0d2446;border-color:#1e4b8b;color:#bfdbfe}.b-warn{background:#2b1e04;border-color:#7c4a09;color:#fde68a}.b-good{background:#082817;border-color:#14532d;color:#bbf7d0}
+    .steps{display:grid;gap:12px}
+    .step{display:flex;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#0c1527}
+    .step .n{width:28px;height:28px;border-radius:999px;background:#173869;color:#d5e6ff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:none}
+    .step strong{display:block;margin-bottom:4px}
+    .step p{font-size:13px;color:var(--muted)}
+    form .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .field{margin-bottom:14px}
+    label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    input{width:100%;min-height:44px;border-radius:12px;border:1px solid var(--line);background:#091325;color:var(--text);padding:11px 13px;font-size:14px;outline:none}
+    input:focus{border-color:#3d74d9;box-shadow:0 0 0 3px rgba(79,140,255,.15)}
+    .list{display:grid;gap:10px}
+    .item{padding:14px;border:1px solid var(--line);background:#0c1527;border-radius:14px}
+    .item h4{font-size:14px;margin-bottom:4px}.item p{font-size:13px;color:var(--muted)}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    .mini{padding:12px;border-radius:14px;background:#0a1222;border:1px solid #1b2c49;font-size:12px;color:var(--muted)}
+    .mini strong{display:block;color:var(--text);font-size:15px;margin-top:4px}
+    .toast{position:fixed;right:20px;bottom:20px;padding:12px 16px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 12px 28px rgba(0,0,0,.35)}
+    .toast.ok{background:#14532d;color:#dcfce7}.toast.err{background:#7f1d1d;color:#fee2e2}
+    code{background:#0b1324;border:1px solid #203150;padding:2px 7px;border-radius:8px;font-size:12px;color:#c8dbff}
+    @media (max-width: 980px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.hero{flex-direction:column}.app{grid-template-columns:1fr}.sidebar{position:static;height:auto}}
+    @media (max-width: 640px){.main{padding:18px 14px 30px}.cards{grid-template-columns:1fr}form .row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <h1>Flow2API Host Agent</h1>
+      <p>把 Google Labs 登录态稳定同步回 Flow2API</p>
+    </div>
+    <div class="nav">
+      <button class="active" data-page="dashboard">📊 仪表盘</button>
+      <button data-page="login-guide">🔑 登录向导</button>
+      <button data-page="settings">⚙️ 配置</button>
+      <button data-page="help">❓ 帮助 / 原理</button>
+    </div>
+    <div class="side-meta">
+      <div>刷新频率：<strong>{{ cfg.refresh_interval_minutes }} 分钟</strong></div>
+      <div>调试端口：<strong>{{ cfg.remote_debugging_port }}</strong></div>
+      <div>Web UI 端口：<strong>{{ cfg.listen_port }}</strong></div>
+      <div style="margin-top:8px">说明：日常只需要看“仪表盘”；首次安装或登录失效时再用“登录向导”。</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="page active" id="page-dashboard">
+      <div class="hero">
+        <div>
+          <h2>仪表盘</h2>
+          <p>这里看当前运行状态、最近一次刷新结果，以及最常用的两个动作：立刻刷新、进入登录向导。</p>
+        </div>
+        <div class="hero-actions">
+          <form method="post" action="/action/run-once"><button class="btn btn-primary" type="submit">⚡ 立即刷新 Token</button></form>
+          <a class="btn btn-secondary" href="/login">🖥️ 打开登录页面</a>
+        </div>
+      </div>
+
+      <div class="cards">
+        <div class="stat"><div class="label">Chrome 状态</div><div class="value">{% if status.chrome_running %}<span class="dot ok"></span>运行中{% else %}<span class="dot bad"></span>未运行{% endif %}</div></div>
+        <div class="stat"><div class="label">最近刷新时间</div><div class="value" style="font-size:18px">{{ last_update_display }}</div></div>
+        <div class="stat"><div class="label">最近结果</div><div class="value" style="font-size:18px">{% if state.success is defined %}{{ '✅ 成功' if state.success else '❌ 失败' }}{% else %}暂无记录{% endif %}</div></div>
+        <div class="stat"><div class="label">自动刷新频率</div><div class="value">{{ cfg.refresh_interval_minutes }} 分钟</div></div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h3>最近一次 Flow2API 响应</h3>
+          <div class="codebox">{{ state.update_body or '暂无返回内容。第一次成功刷新后，这里会显示 Flow2API 的响应。' }}</div>
+        </div>
+        <div class="panel">
+          <h3>当前状态摘要</h3>
+          <div class="list">
+            <div class="item"><h4>这个服务现在在做什么？</h4><p>Daemon 会按照配置的间隔自动执行一次刷新。手动点击“立即刷新 Token”时，会立刻执行一次，不影响后续定时任务。</p></div>
+            <div class="item"><h4>什么时候需要你介入？</h4><p>只有两种情况：第一次安装、或者 Google 登录态失效。其他时间基本都不需要动它。</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="page-login-guide">
+      <div class="hero">
+        <div>
+          <h2>登录向导</h2>
+          <p>给第一次安装的用户准备的，尽量按“看一眼就会”的方式写。日常不需要反复操作这里。</p>
+        </div>
+        <div class="hero-actions">
+          <form method="post" action="/action/launch-browser"><button class="btn btn-secondary" type="submit">🚀 启动登录浏览器</button></form>
+          <a class="btn btn-primary" href="/login">🔑 进入登录页面</a>
+        </div>
+      </div>
+
+      <div class="banner b-info"><strong>什么时候需要重新登录？</strong><br>首次安装后需要登录一次；之后只要 Google 登录态没过期，daemon 就会持续自动刷新。通常不需要天天管。</div>
+
+      <div class="steps">
+        <div class="step"><div class="n">1</div><div><strong>启动登录浏览器</strong><p>点击上方“启动登录浏览器”。服务器上的 Chrome 会在虚拟桌面里启动，并打开 Google Labs Flow 页面。</p></div></div>
+        <div class="step"><div class="n">2</div><div><strong>进入登录页面</strong><p>点击“进入登录页面”，你会看到嵌入式 noVNC 页面。直接在里面像普通浏览器一样点、输、登录就行。</p></div></div>
+        <div class="step"><div class="n">3</div><div><strong>确认已经进入 labs.google</strong><p>登录成功后，确保浏览器停留在 Google Labs / Flow 页面。不要关掉这个浏览器窗口。</p></div></div>
+        <div class="step"><div class="n">4</div><div><strong>回到仪表盘点击“立即刷新 Token”</strong><p>如果看到最近结果变成 <code>成功</code>，说明登录态已经被正确同步进 Flow2API，后续就交给 daemon 自动维护。</p></div></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-settings">
+      <div class="hero">
+        <div>
+          <h2>配置</h2>
+          <p>这里放“真正需要填的东西”，并把最容易让人困惑的 Connection Token 解释清楚。</p>
+        </div>
+      </div>
+
+      <div class="banner b-warn"><strong>Connection Token 是什么？怎么获取？</strong><br>它可以理解成 <strong>Host Agent 和 Flow2API 之间的“握手密钥”</strong>。Host Agent 每次把最新登录态推送回 Flow2API 时，Flow2API 会用它来确认“这是不是你授权的来源”。<br><br><strong>获取方法：</strong>打开 Flow2API 管理后台 → 顶部 <strong>设置</strong> → 找到 <strong>插件连接配置</strong> → 复制里面的 <strong>连接 Token</strong>。如果为空，就先生成一个再保存。</div>
+
+      <div class="panel">
+        <h3>基础参数</h3>
+        <form method="post" action="/action/save">
+          <div class="field">
+            <label>Flow2API 地址</label>
+            <input name="flow2api_url" value="{{ cfg.flow2api_url }}">
+            <div class="hint">示例：<code>http://127.0.0.1:38000</code> 或你自己的域名地址。</div>
+          </div>
+          <div class="field">
+            <label>Connection Token</label>
+            <input name="connection_token" value="{{ cfg.connection_token }}">
+            <div class="hint">从 Flow2API 管理后台复制过来。它不是 Google 的 token，也不是 OpenAI/Claude 的 key。</div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Chrome Profile 目录</label>
+              <input name="chrome_profile_dir" value="{{ cfg.chrome_profile_dir }}">
+              <div class="hint">登录态就保存在这里。换目录会导致需要重新登录。</div>
+            </div>
+            <div class="field">
+              <label>Remote Debugging Port</label>
+              <input type="number" name="remote_debugging_port" value="{{ cfg.remote_debugging_port }}">
+              <div class="hint">Host Agent 通过这个端口附着到正在运行的 Chrome。</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Display</label>
+              <input name="display" value="{{ cfg.display }}">
+              <div class="hint">Linux 虚拟桌面 display，通常保持 <code>:99</code> 就行。</div>
+            </div>
+            <div class="field">
+              <label>刷新频率（分钟）</label>
+              <input type="number" min="5" max="1440" name="refresh_interval_minutes" value="{{ cfg.refresh_interval_minutes }}">
+              <div class="hint">建议 15–60 分钟。太短会增加浏览器唤醒频率，太长则遇到登录态波动时恢复会慢一些。</div>
+            </div>
+          </div>
+          <div class="field">
+            <label>noVNC 地址</label>
+            <input name="novnc_url" value="{{ cfg.get('novnc_url', '') }}">
+            <div class="hint">手机或外部设备访问时，这里不要填 <code>localhost</code>，应填服务器可访问地址，例如 <code>http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale</code>。</div>
+          </div>
+          <button class="btn btn-primary" type="submit">💾 保存配置</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="page" id="page-help">
+      <div class="hero">
+        <div>
+          <h2>帮助 / 原理 / 稳定性</h2>
+          <p>把“它到底怎么工作”“会不会越跑越重”“需不需要定时重启”这些问题都说透。</p>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h3>工作原理</h3>
+          <div class="list">
+            <div class="item"><h4>1. 浏览器登录态留在宿主机</h4><p>Google Labs 的登录态保存在服务器上的 Chrome Profile 中，不塞进 Flow2API Docker 容器里。</p></div>
+            <div class="item"><h4>2. Host Agent 通过 CDP 附着到 Chrome</h4><p>不是读加密数据库，也不是装浏览器扩展，而是通过 Chrome 的远程调试接口读取运行中的 cookie。</p></div>
+            <div class="item"><h4>3. 读取到 session token 后推送回 Flow2API</h4><p>通过 Flow2API 已有的插件更新接口，把最新登录态同步进去。Connection Token 就是这一步的授权凭证。</p></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>资源与长期运行</h3>
+          <div class="banner b-good"><strong>当前判断：</strong>Python daemon 和 Web UI 自身都很轻；真正的大头通常是 Chrome 进程，尤其是 GPU/renderer 相关子进程。</div>
+          <div class="kpis">
+            <div class="mini">Web UI 进程内存<strong>约 60MB</strong></div>
+            <div class="mini">Daemon 进程内存<strong>很低</strong></div>
+            <div class="mini">主要资源热点<strong>Chrome GPU/renderer</strong></div>
+            <div class="mini">优化方向<strong>禁用 GPU / 降低后台开销</strong></div>
+          </div>
+          <div class="list" style="margin-top:12px">
+            <div class="item"><h4>会不会越用越大？</h4><p>理论上任何长期运行的浏览器都有积累开销的可能，尤其是在云服务器 + Xvfb 环境里。所以要把风险主要看作“Chrome 的长期稳定性”，而不是 Python 逻辑。</p></div>
+            <div class="item"><h4>需不需要每天定时重启？</h4><p><strong>可以做，而且是合理的防御性策略。</strong>如果你追求长期省心，可以加一个 systemd timer，每天低峰时段重启一次 browser/daemon/UI 服务，减少长期累积状态带来的偶发问题。</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <h3>推荐运维策略</h3>
+        <div class="list">
+          <div class="item"><h4>普通用户默认策略</h4><p>刷新频率设置为 30 分钟；只有首次安装或登录失效时手动介入；其余时间交给 daemon 自动跑。</p></div>
+          <div class="item"><h4>追求稳定的策略</h4><p>额外加一个每天凌晨的重启计划，例如每日 04:30 重启一次 browser + daemon，可进一步减少长跑累积状态。</p></div>
+          <div class="item"><h4>异常排查顺序</h4><p>先看仪表盘结果 → 再看登录页是否仍处于 Google Labs 已登录状态 → 再确认 Flow2API Connection Token 是否一致。</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+{% set refreshed = request.query_params.get('refreshed') %}
+{% set saved = request.query_params.get('saved') %}
+{% if refreshed == '1' %}<div class="toast ok" id="toast">✅ Token 刷新成功</div>{% elif refreshed == '0' %}<div class="toast err" id="toast">❌ Token 刷新失败，请检查登录状态</div>{% elif saved == '1' %}<div class="toast ok" id="toast">💾 配置已保存</div>{% endif %}
+
+<script>
+  const navBtns = document.querySelectorAll('.nav button');
+  const pages = document.querySelectorAll('.page');
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      pages.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    });
+  });
+  const toast = document.getElementById('toast');
+  if (toast) setTimeout(() => toast.remove(), 3200);
+</script>
+</body>
+</html>

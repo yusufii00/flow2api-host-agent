@@ -1,0 +1,14 @@
+[Unit]
+Description=Flow2API Host Agent Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/flow2api-host-agent
+ExecStart=/usr/bin/python3 /opt/flow2api-host-agent/scripts/agent.py --config /opt/flow2api-host-agent/agent.toml daemon
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

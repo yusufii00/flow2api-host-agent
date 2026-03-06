@@ -1,0 +1,13 @@
+[Unit]
+Description=Flow2API Host Agent Browser
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/flow2api-host-agent
+ExecStart=/usr/bin/python3 /opt/flow2api-host-agent/scripts/agent.py --config /opt/flow2api-host-agent/agent.toml login
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

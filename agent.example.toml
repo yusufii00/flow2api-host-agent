@@ -1,0 +1,13 @@
+flow2api_url = "http://127.0.0.1:38000"
+connection_token = ""
+chrome_profile_dir = "/var/lib/flow2api-host-agent/profile"
+chrome_binary = "/usr/bin/google-chrome"
+remote_debugging_port = 9223
+display = ":99"
+start_url = "https://labs.google/fx/vi/tools/flow"
+refresh_interval_minutes = 30
+state_file = "/var/lib/flow2api-host-agent/state.json"
+log_file = "/var/log/flow2api-host-agent.log"
+listen_host = "0.0.0.0"
+listen_port = 38110
+novnc_url = "http://YOUR_SERVER_IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"

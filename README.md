@@ -24,6 +24,18 @@
 
 ---
 
+## 成熟版改进点
+
+这个版本额外做了几件对生产更友好的事：
+
+- **统一 Python 运行时**：Web UI / daemon / one-shot 命令全部走项目内 `.venv`
+- **新增健康检查**：提供 `/api/health`，把 Chrome、最近刷新、Connection Token 配置分层展示
+- **配置防呆**：阻止把 `Connection Token` 错填成 URL
+- **安装更稳**：`install-systemd.sh` 自动创建 `.venv` 并为 systemd 固定解释器路径
+- **日志更清晰**：Chrome 日志和 daemon 日志拆分
+
+---
+
 ## 3 分钟上手
 
 ### 1. 克隆仓库
@@ -50,7 +62,7 @@ nano agent.toml
 
 ```toml
 flow2api_url = "http://127.0.0.1:38000"
-connection_token = "从 Flow2API 管理后台复制"
+connection_token = "从 Flow2API 管理后台复制的 token 字符串"
 novnc_url = "http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"
 listen_host = "0.0.0.0"
 listen_port = 38110
@@ -102,6 +114,7 @@ systemctl start flow2api-host-agent
 - 通过 Chrome DevTools Protocol 读取 `__Secure-next-auth.session-token`
 - 调用 Flow2API 的 `/api/plugin/update-token` 自动更新 token
 - 提供 Web UI（仪表盘 / 登录向导 / 配置 / 帮助）
+- 提供 `/api/status` 与 `/api/health`
 - 支持 systemd 常驻
 - 支持可选的每日维护性重启 timer
 
@@ -122,14 +135,46 @@ systemctl start flow2api-host-agent
 
 > Host Agent 每次把 session token 推送回 Flow2API 时，Flow2API 用它验证“这个请求是不是你授权的来源”。
 
+### 重要：这里填的是 token，不是 URL
+
+**正确：**
+
+```text
+abc123xyz
+```
+
+**错误：**
+
+```text
+http://127.0.0.1:38000/api/plugin/update-token
+```
+
 ---
 
 ## Web UI 页面说明
 
-- **仪表盘**：看最近一次刷新结果和当前状态
+- **仪表盘**：看最近一次刷新结果和分层状态
 - **登录向导**：首次使用 / 登录失效时用
 - **配置**：修改 Flow2API 地址、Connection Token、noVNC 地址等
 - **帮助 / 原理 / 稳定性**：解释它怎么工作、会不会越跑越重、为什么建议维护性重启
+
+---
+
+## API
+
+### `GET /api/status`
+
+返回当前 Chrome/CDP 状态和最近一次状态文件。
+
+### `GET /api/health`
+
+返回更适合排错的分层健康信息：
+
+- Chrome / CDP 是否正常
+- 最近一次刷新是否成功
+- Connection Token 配置是否可疑
+- Chrome binary 是否存在
+- 当前运行时 Python 是哪个
 
 ---
 
@@ -182,13 +227,37 @@ novnc_url = "http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scal
 
 ---
 
+## 常见问题
+
+### 1）页面显示 Chrome 未运行，但 daemon 明明在跑
+
+旧版本可能出现这个问题，原因通常是：
+
+- Web UI 用了系统 `python3` 调子命令
+- daemon 却跑在项目自己的虚拟环境里
+- 导致 UI 自检失败，但底层服务其实是好的
+
+新版本已经统一为项目内 `.venv` 运行时，避免这类假失败。
+
+### 2）为什么会报 `Invalid connection token`
+
+通常是因为你把 `Connection Token` 填成了 URL，而不是 token 字符串。
+
+### 3）怎么快速自检
+
+```bash
+curl http://127.0.0.1:38110/api/health
+```
+
+---
+
 ## 适用前提
 
 你需要先有：
 
 1. **一台 Linux 服务器**
 2. **已部署好的 Flow2API**
-3. **Google Chrome**
+3. **Google Chrome / Chromium**
 4. **Xvfb / noVNC**（用于服务器上的浏览器登录）
 
 ---

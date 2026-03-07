@@ -7,7 +7,7 @@ display = ":99"
 start_url = "https://labs.google/fx/vi/tools/flow"
 refresh_interval_minutes = 30
 state_file = "/var/lib/flow2api-host-agent/state.json"
-log_file = "/var/log/flow2api-host-agent.log"
+log_file = "/var/log/flow2api-host-agent/chrome.log"
 listen_host = "0.0.0.0"
 listen_port = 38110
 novnc_url = "http://YOUR_SERVER_IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"

@@ -19,7 +19,7 @@
     .step.active .step-num{background:#3b82f6;border-color:#3b82f6;color:#fff}
     .step-sep{color:#334155;margin:0 2px}
     .main{flex:1;display:flex;overflow:hidden}
-    .sidebar{width:280px;flex-shrink:0;padding:16px;background:#0f172a;border-right:1px solid #1e2a45;overflow-y:auto}
+    .sidebar{width:320px;flex-shrink:0;padding:16px;background:#0f172a;border-right:1px solid #1e2a45;overflow-y:auto}
     .sidebar h2{font-size:13px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
     .guide-step{display:flex;gap:10px;margin-bottom:14px}
     .guide-num{width:22px;height:22px;border-radius:50%;background:#1e3a5f;color:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
@@ -31,6 +31,7 @@
     .divider{border:none;border-top:1px solid #1e2a45;margin:16px 0}
     .tip{background:#1e2a45;border-radius:8px;padding:10px 12px;font-size:12px;color:#94a3b8;line-height:1.5;margin-top:12px}
     .tip strong{color:#60a5fa}
+    .warn{background:#3a1d04;color:#fde68a}
     .vnc-wrap{flex:1;position:relative;overflow:hidden;background:#000}
     iframe{width:100%;height:100%;border:none;display:block}
     .vnc-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0b1020;z-index:10}
@@ -40,8 +41,6 @@
   </style>
 </head>
 <body>
-
-<!-- Top Bar -->
 <div class="topbar">
   <div class="topbar-left">
     <a href="/" style="color:#64748b;font-size:13px;text-decoration:none">← 返回</a>
@@ -55,44 +54,21 @@
   </form>
 </div>
 
-<!-- Step Guide -->
 <div class="steps">
-  <div class="step active">
-    <div class="step-num">1</div>
-    <span>启动浏览器</span>
-  </div>
+  <div class="step active"><div class="step-num">1</div><span>启动浏览器</span></div>
   <span class="step-sep">›</span>
-  <div class="step active">
-    <div class="step-num">2</div>
-    <span>在下方窗口登录 Google 账号</span>
-  </div>
+  <div class="step active"><div class="step-num">2</div><span>在下方窗口登录 Google 账号</span></div>
   <span class="step-sep">›</span>
-  <div class="step">
-    <div class="step-num">3</div>
-    <span>点击右上角「立即刷新 Token」</span>
-  </div>
+  <div class="step"><div class="step-num">3</div><span>点击右上角「立即刷新 Token」</span></div>
 </div>
 
 <div class="main">
-  <!-- Sidebar Guide -->
   <div class="sidebar">
     <h2>操作步骤</h2>
-    <div class="guide-step">
-      <div class="guide-num">1</div>
-      <div class="guide-text">如果右侧窗口是黑屏，点击<strong>「重新启动浏览器」</strong></div>
-    </div>
-    <div class="guide-step">
-      <div class="guide-num">2</div>
-      <div class="guide-text">在右侧浏览器窗口里<strong>登录你的 Google 账号</strong>（和你 Google Labs 一致的账号）</div>
-    </div>
-    <div class="guide-step">
-      <div class="guide-num">3</div>
-      <div class="guide-text">确保已经进入<strong>Google Labs Flow</strong> 页面（地址栏显示 labs.google）</div>
-    </div>
-    <div class="guide-step">
-      <div class="guide-num">4</div>
-      <div class="guide-text">回到顶部，点击<strong>「立即刷新 Token」</strong></div>
-    </div>
+    <div class="guide-step"><div class="guide-num">1</div><div class="guide-text">如果右侧窗口是黑屏，点击<strong>「重新启动浏览器」</strong></div></div>
+    <div class="guide-step"><div class="guide-num">2</div><div class="guide-text">在右侧浏览器窗口里<strong>登录你的 Google 账号</strong>（和你 Google Labs 一致的账号）</div></div>
+    <div class="guide-step"><div class="guide-num">3</div><div class="guide-text">确保已经进入<strong>Google Labs Flow</strong> 页面（地址栏显示 labs.google）</div></div>
+    <div class="guide-step"><div class="guide-num">4</div><div class="guide-text">回到顶部，点击<strong>「立即刷新 Token」</strong></div></div>
 
     <hr class="divider">
 
@@ -104,23 +80,20 @@
       <strong>提示：</strong>右侧窗口是你服务器上的浏览器，操作和普通浏览器一样。登录信息保存在本地 Profile，下次无需重新登录。
     </div>
 
-
+    {% if not health.checks.connection_token_config.ok %}
+    <div class="tip warn">
+      <strong>注意：</strong>{{ health.checks.connection_token_config.message }}。如果你刚部署完成，请先去仪表盘配置里确认 Token 填的是字符串，不是 URL。
+    </div>
+    {% endif %}
   </div>
 
-  <!-- noVNC iframe -->
   <div class="vnc-wrap">
     <div class="vnc-overlay" id="loading">
       <div class="spinner"></div>
       <p>正在连接桌面...</p>
     </div>
-    <iframe
-      id="vnc"
-      src="{{ novnc_url }}"
-      allow="fullscreen"
-      onload="document.getElementById('loading').style.display='none'"
-    ></iframe>
+    <iframe id="vnc" src="{{ novnc_url }}" allow="fullscreen" onload="document.getElementById('loading').style.display='none'"></iframe>
   </div>
 </div>
-
 </body>
 </html>

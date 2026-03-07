@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Allow running from any working directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from core import load_config, start_chrome, chrome_running, run_once, read_json
+from core import load_config, start_chrome, chrome_running, run_once, read_json, health_report
 
 
 def main():
@@ -17,6 +17,7 @@ def main():
     sub.add_parser('login')
     sub.add_parser('run-once')
     sub.add_parser('status')
+    sub.add_parser('health')
     sub.add_parser('daemon')
     args = ap.parse_args()
 
@@ -39,6 +40,17 @@ def main():
             'profile_dir': cfg['chrome_profile_dir'],
             'last_state': state,
         }, ensure_ascii=False))
+        return
+
+    if args.cmd == 'health':
+        state = read_json(cfg['state_file']) or {}
+        status = {
+            'chrome_running': chrome_running(cfg['remote_debugging_port']),
+            'debug_port': cfg['remote_debugging_port'],
+            'profile_dir': cfg['chrome_profile_dir'],
+            'last_state': state,
+        }
+        print(json.dumps(health_report(cfg, status=status, state=state), ensure_ascii=False))
         return
 
     if args.cmd == 'daemon':

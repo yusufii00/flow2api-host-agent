@@ -40,7 +40,7 @@
     .panel{background:linear-gradient(180deg,#10192c,#0c1426);border:1px solid var(--line);border-radius:18px;padding:18px}
     .panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:14px}
     .codebox{background:#0a1222;border:1px solid #1c2d4a;border-radius:14px;padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#bdd0f6;white-space:pre-wrap;word-break:break-word}
-    .banner{border-radius:16px;padding:14px 16px;margin-bottom:14px;border:1px solid}.b-info{background:#0d2446;border-color:#1e4b8b;color:#bfdbfe}.b-warn{background:#2b1e04;border-color:#7c4a09;color:#fde68a}.b-good{background:#082817;border-color:#14532d;color:#bbf7d0}
+    .banner{border-radius:16px;padding:14px 16px;margin-bottom:14px;border:1px solid}.b-info{background:#0d2446;border-color:#1e4b8b;color:#bfdbfe}.b-warn{background:#2b1e04;border-color:#7c4a09;color:#fde68a}.b-good{background:#082817;border-color:#14532d;color:#bbf7d0}.b-bad{background:#3a1111;border-color:#7f1d1d;color:#fecaca}
     .steps{display:grid;gap:12px}
     .step{display:flex;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#0c1527}
     .step .n{width:28px;height:28px;border-radius:999px;background:#173869;color:#d5e6ff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:none}
@@ -58,6 +58,8 @@
     .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
     .mini{padding:12px;border-radius:14px;background:#0a1222;border:1px solid #1b2c49;font-size:12px;color:var(--muted)}
     .mini strong{display:block;color:var(--text);font-size:15px;margin-top:4px}
+    .status-list{display:grid;gap:10px}
+    .status-item{padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#0c1527;font-size:13px}
     .toast{position:fixed;right:20px;bottom:20px;padding:12px 16px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 12px 28px rgba(0,0,0,.35)}
     .toast.ok{background:#14532d;color:#dcfce7}.toast.err{background:#7f1d1d;color:#fee2e2}
     code{background:#0b1324;border:1px solid #203150;padding:2px 7px;border-radius:8px;font-size:12px;color:#c8dbff}
@@ -99,6 +101,12 @@
         </div>
       </div>
 
+      {% if not health.ok %}
+      <div class="banner b-bad"><strong>健康检查发现问题：</strong><br>{{ health.problems | join('；') }}</div>
+      {% else %}
+      <div class="banner b-good"><strong>健康检查正常：</strong><br>Chrome CDP、最近刷新状态、关键配置项看起来都正常。</div>
+      {% endif %}
+
       <div class="cards">
         <div class="stat"><div class="label">Chrome 状态</div><div class="value">{% if status.chrome_running %}<span class="dot ok"></span>运行中{% else %}<span class="dot bad"></span>未运行{% endif %}</div></div>
         <div class="stat"><div class="label">最近刷新时间</div><div class="value" style="font-size:18px">{{ last_update_display }}</div></div>
@@ -109,13 +117,16 @@
       <div class="grid">
         <div class="panel">
           <h3>最近一次 Flow2API 响应</h3>
-          <div class="codebox">{{ state.update_body or '暂无返回内容。第一次成功刷新后，这里会显示 Flow2API 的响应。' }}</div>
+          <div class="codebox">{{ state.update_body or state.error or '暂无返回内容。第一次成功刷新后，这里会显示 Flow2API 的响应。' }}</div>
         </div>
         <div class="panel">
-          <h3>当前状态摘要</h3>
-          <div class="list">
-            <div class="item"><h4>这个服务现在在做什么？</h4><p>Daemon 会按照配置的间隔自动执行一次刷新。手动点击“立即刷新 Token”时，会立刻执行一次，不影响后续定时任务。</p></div>
-            <div class="item"><h4>什么时候需要你介入？</h4><p>只有两种情况：第一次安装、或者 Google 登录态失效。其他时间基本都不需要动它。</p></div>
+          <h3>分层状态</h3>
+          <div class="status-list">
+            <div class="status-item">Chrome / CDP：{{ '✅ 正常' if health.checks.chrome_cdp.ok else '❌ 异常' }} · {{ health.checks.chrome_cdp.message }}</div>
+            <div class="status-item">最近刷新：{{ '✅ 正常' if health.checks.last_refresh.ok else '❌ 异常' }} · {{ health.checks.last_refresh.message }}</div>
+            <div class="status-item">Connection Token 配置：{{ '✅ 正常' if health.checks.connection_token_config.ok else '❌ 可疑' }} · {{ health.checks.connection_token_config.message }}</div>
+            <div class="status-item">Chrome Binary：{{ '✅ 存在' if health.checks.chrome_binary.ok else '❌ 缺失' }} · {{ health.checks.chrome_binary.message }}</div>
+            <div class="status-item">运行时 Python：✅ {{ health.checks.runtime_python.message }}</div>
           </div>
         </div>
       </div>
@@ -147,24 +158,24 @@
       <div class="hero">
         <div>
           <h2>配置</h2>
-          <p>这里放“真正需要填的东西”，并把最容易让人困惑的 Connection Token 解释清楚。</p>
+          <p>这里放真正需要填的东西，并对容易混淆的项目做防呆提示。</p>
         </div>
       </div>
 
-      <div class="banner b-warn"><strong>Connection Token 是什么？怎么获取？</strong><br>它可以理解成 <strong>Host Agent 和 Flow2API 之间的“握手密钥”</strong>。Host Agent 每次把最新登录态推送回 Flow2API 时，Flow2API 会用它来确认“这是不是你授权的来源”。<br><br><strong>获取方法：</strong>打开 Flow2API 管理后台 → 顶部 <strong>设置</strong> → 找到 <strong>插件连接配置</strong> → 复制里面的 <strong>连接 Token</strong>。如果为空，就先生成一个再保存。</div>
+      <div class="banner b-warn"><strong>Connection Token 是什么？怎么获取？</strong><br>它是 <strong>Flow2API 插件连接配置里的 token 字符串</strong>，不是 URL。<br><br><strong>正确示例：</strong><code>abc123xyz</code><br><strong>错误示例：</strong><code>http://127.0.0.1:38000/api/plugin/update-token</code></div>
 
       <div class="panel">
         <h3>基础参数</h3>
         <form method="post" action="/action/save">
           <div class="field">
             <label>Flow2API 地址</label>
-            <input name="flow2api_url" value="{{ cfg.flow2api_url }}">
+            <input name="flow2api_url" value="{{ cfg.flow2api_url }}" placeholder="http://127.0.0.1:38000">
             <div class="hint">示例：<code>http://127.0.0.1:38000</code> 或你自己的域名地址。</div>
           </div>
           <div class="field">
-            <label>Connection Token</label>
-            <input name="connection_token" value="{{ cfg.connection_token }}">
-            <div class="hint">从 Flow2API 管理后台复制过来。它不是 Google 的 token，也不是 OpenAI/Claude 的 key。</div>
+            <label>Flow2API Plugin Connection Token</label>
+            <input name="connection_token" value="{{ cfg.connection_token }}" placeholder="例如：abc123xyz（这里只填 token，不填 URL）">
+            <div class="hint">这里只填 token 字符串，不要填写 <code>/api/plugin/update-token</code> 接口地址。</div>
           </div>
           <div class="row">
             <div class="field">
@@ -193,7 +204,7 @@
           <div class="field">
             <label>noVNC 地址</label>
             <input name="novnc_url" value="{{ cfg.get('novnc_url', '') }}">
-            <div class="hint">手机或外部设备访问时，这里不要填 <code>localhost</code>，应填服务器可访问地址，例如 <code>http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale</code>。</div>
+            <div class="hint">如果从手机或另一台电脑访问，这里不要填 <code>localhost</code>，应填服务器实际可访问地址。</div>
           </div>
           <button class="btn btn-primary" type="submit">💾 保存配置</button>
         </form>
@@ -238,7 +249,7 @@
         <div class="list">
           <div class="item"><h4>普通用户默认策略</h4><p>刷新频率设置为 30 分钟；只有首次安装或登录失效时手动介入；其余时间交给 daemon 自动跑。</p></div>
           <div class="item"><h4>追求稳定的策略</h4><p>额外加一个每天凌晨的重启计划，例如每日 04:30 重启一次 browser + daemon，可进一步减少长跑累积状态。</p></div>
-          <div class="item"><h4>异常排查顺序</h4><p>先看仪表盘结果 → 再看登录页是否仍处于 Google Labs 已登录状态 → 再确认 Flow2API Connection Token 是否一致。</p></div>
+          <div class="item"><h4>异常排查顺序</h4><p>先看仪表盘的分层状态 → 再看登录页是否仍处于 Google Labs 已登录状态 → 再确认 Flow2API Connection Token 是否一致。</p></div>
         </div>
       </div>
     </section>
@@ -247,7 +258,8 @@
 
 {% set refreshed = request.query_params.get('refreshed') %}
 {% set saved = request.query_params.get('saved') %}
-{% if refreshed == '1' %}<div class="toast ok" id="toast">✅ Token 刷新成功</div>{% elif refreshed == '0' %}<div class="toast err" id="toast">❌ Token 刷新失败，请检查登录状态</div>{% elif saved == '1' %}<div class="toast ok" id="toast">💾 配置已保存</div>{% endif %}
+{% set reason = request.query_params.get('reason') %}
+{% if refreshed == '1' %}<div class="toast ok" id="toast">✅ Token 刷新成功</div>{% elif refreshed == '0' %}<div class="toast err" id="toast">❌ Token 刷新失败，请先看仪表盘里的分层状态</div>{% elif saved == '1' %}<div class="toast ok" id="toast">💾 配置已保存</div>{% elif saved == '0' and reason == 'config' %}<div class="toast err" id="toast">❌ 配置未保存：请检查 token / URL 是否填错</div>{% endif %}
 
 <script>
   const navBtns = document.querySelectorAll('.nav button');

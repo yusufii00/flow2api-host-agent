@@ -35,12 +35,12 @@
     .stat{background:linear-gradient(180deg,#101a2f,#0d1528);border:1px solid var(--line);border-radius:16px;padding:16px}
     .stat .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
     .stat .value{font-size:22px;font-weight:800;margin-top:8px}
-    .dot{width:10px;height:10px;border-radius:999px;display:inline-block;margin-right:8px}.ok{background:var(--green)}.bad{background:var(--red)}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block;margin-right:8px}.ok{background:var(--green)}.bad{background:var(--red)}.warn{background:var(--amber)}
     .grid{display:grid;grid-template-columns:1.3fr .9fr;gap:16px}
     .panel{background:linear-gradient(180deg,#10192c,#0c1426);border:1px solid var(--line);border-radius:18px;padding:18px}
     .panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:14px}
     .codebox{background:#0a1222;border:1px solid #1c2d4a;border-radius:14px;padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#bdd0f6;white-space:pre-wrap;word-break:break-word}
-    .banner{border-radius:16px;padding:14px 16px;margin-bottom:14px;border:1px solid}.b-info{background:#0d2446;border-color:#1e4b8b;color:#bfdbfe}.b-warn{background:#2b1e04;border-color:#7c4a09;color:#fde68a}.b-good{background:#082817;border-color:#14532d;color:#bbf7d0}
+    .banner{border-radius:16px;padding:14px 16px;margin-bottom:14px;border:1px solid}.b-info{background:#0d2446;border-color:#1e4b8b;color:#bfdbfe}.b-warn{background:#2b1e04;border-color:#7c4a09;color:#fde68a}.b-good{background:#082817;border-color:#14532d;color:#bbf7d0}.b-bad{background:#331013;border-color:#7f1d1d;color:#fecaca}
     .steps{display:grid;gap:12px}
     .step{display:flex;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#0c1527}
     .step .n{width:28px;height:28px;border-radius:999px;background:#173869;color:#d5e6ff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:none}
@@ -60,9 +60,15 @@
     .mini strong{display:block;color:var(--text);font-size:15px;margin-top:4px}
     .toast{position:fixed;right:20px;bottom:20px;padding:12px 16px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 12px 28px rgba(0,0,0,.35)}
     .toast.ok{background:#14532d;color:#dcfce7}.toast.err{background:#7f1d1d;color:#fee2e2}
+    .kv{display:grid;grid-template-columns:160px 1fr;gap:8px 12px;font-size:13px}
+    .kv div:nth-child(odd){color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #2a3d60;background:#0b1424}
+    .pill.ok{color:#bbf7d0;border-color:#14532d;background:#082817}
+    .pill.warn{color:#fde68a;border-color:#7c4a09;background:#2b1e04}
+    .pill.bad{color:#fecaca;border-color:#7f1d1d;background:#331013}
     code{background:#0b1324;border:1px solid #203150;padding:2px 7px;border-radius:8px;font-size:12px;color:#c8dbff}
     @media (max-width: 980px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.hero{flex-direction:column}.app{grid-template-columns:1fr}.sidebar{position:static;height:auto}}
-    @media (max-width: 640px){.main{padding:18px 14px 30px}.cards{grid-template-columns:1fr}form .row{grid-template-columns:1fr}}
+    @media (max-width: 640px){.main{padding:18px 14px 30px}.cards{grid-template-columns:1fr}form .row{grid-template-columns:1fr}.kv{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -82,7 +88,7 @@
       <div>刷新频率：<strong>{{ cfg.refresh_interval_minutes }} 分钟</strong></div>
       <div>调试端口：<strong>{{ cfg.remote_debugging_port }}</strong></div>
       <div>Web UI 端口：<strong>{{ cfg.listen_port }}</strong></div>
-      <div style="margin-top:8px">说明：日常只需要看“仪表盘”；首次安装或登录失效时再用“登录向导”。</div>
+      <div style="margin-top:8px">说明：仪表盘现在会直接显示“写后校验、页面异常、重试次数、AT 过期时间”。</div>
     </div>
   </aside>
 
@@ -91,13 +97,26 @@
       <div class="hero">
         <div>
           <h2>仪表盘</h2>
-          <p>这里看当前运行状态、最近一次刷新结果，以及最常用的两个动作：立刻刷新、进入登录向导。</p>
+          <p>这里不只是看“成没成功”，还会告诉你：写后校验有没有通过、页面是不是跳到了异常登录页、有没有触发重试、以及当前 AT 过期时间。</p>
         </div>
         <div class="hero-actions">
           <form method="post" action="/action/run-once"><button class="btn btn-primary" type="submit">⚡ 立即刷新 Token</button></form>
           <a class="btn btn-secondary" href="/login">🖥️ 打开登录页面</a>
         </div>
       </div>
+
+      {% if state.prewarm_warning %}
+      <div class="banner b-warn"><strong>⚠️ 页面状态异常</strong><br>{{ state.prewarm_warning }}</div>
+      {% endif %}
+      {% if state.error %}
+      <div class="banner b-bad"><strong>❌ 最近一次刷新失败</strong><br>{{ state.error }}</div>
+      {% endif %}
+      {% if state.warning %}
+      <div class="banner b-warn"><strong>⚠️ 最近一次刷新带警告</strong><br>{{ state.warning }}</div>
+      {% endif %}
+      {% if state.success and state.write_verification and state.write_verification.verified %}
+      <div class="banner b-good"><strong>✅ 已确认写入成功</strong><br>最新一次刷新不仅接口成功，而且已经回读本地 Flow2API 数据库并确认 ST 指纹一致。</div>
+      {% endif %}
 
       <div class="cards">
         <div class="stat"><div class="label">Chrome 状态</div><div class="value">{% if status.chrome_running %}<span class="dot ok"></span>运行中{% else %}<span class="dot bad"></span>未运行{% endif %}</div></div>
@@ -107,18 +126,102 @@
         <div class="stat"><div class="label">下次自动刷新</div><div class="value" style="font-size:18px"><span id="next-refresh-display">{{ next_refresh_display }}</span><div style="font-size:12px;color:var(--muted);margin-top:6px">倒计时：<span id="countdown">—</span></div></div></div>
       </div>
 
+      <div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+        <div class="stat"><div class="label">写后校验</div><div class="value" style="font-size:18px">{% if state.write_verification %}{{ '✅ 通过' if state.write_verification.verified else '⚠️ 未通过' }}{% else %}—{% endif %}</div></div>
+        <div class="stat"><div class="label">AT 过期时间</div><div class="value" style="font-size:16px">{{ state.write_verification.at_expires if state.write_verification and state.write_verification.at_expires else '—' }}</div></div>
+        <div class="stat"><div class="label">页面预热</div><div class="value" style="font-size:18px">{% if state.prewarm and state.prewarm.page_state %}{{ '⚠️ 异常' if state.prewarm.page_state.is_abnormal else '✅ 正常' }}{% else %}—{% endif %}</div></div>
+        <div class="stat"><div class="label">重试次数</div><div class="value">{{ state.attempt_count if state.attempt_count else 1 }}</div></div>
+      </div>
+
       <div class="grid">
+        <div class="panel">
+          <h3>关键状态摘要</h3>
+          <div class="list">
+            <div class="item">
+              <h4>这次到底算不算“真成功”？</h4>
+              <p>
+                {% if state.success and state.write_verification and state.write_verification.verified %}
+                算。接口成功 + Flow2API 数据库回读成功 + ST 指纹一致。
+                {% elif state.success %}
+                只算接口层成功，但没拿到完整的落库证明。
+                {% else %}
+                不算，最近一次没有通过完整刷新链路。
+                {% endif %}
+              </p>
+            </div>
+            <div class="item">
+              <h4>页面状态</h4>
+              <p>
+                {% if state.prewarm and state.prewarm.page_state %}
+                预热后落在：<code>{{ state.prewarm.page_state.url }}</code>
+                {% if state.prewarm.page_state.is_abnormal %}<br>这通常意味着浏览器被重定向到登录/授权页，但只要 cookie 还有效，仍可能刷新成功。{% endif %}
+                {% else %}
+                暂无页面预热信息。
+                {% endif %}
+              </p>
+            </div>
+            <div class="item">
+              <h4>重试机制</h4><p>现在默认失败会自动重试 <code>{{ cfg.get('retry_count', 1) }}</code> 次，重试间隔 <code>{{ cfg.get('retry_delay_ms', 3000) }}ms</code>。</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>校验状态</h3>
+          <div class="list">
+            <div class="item">
+              <h4>页面预热</h4>
+              {% if state.prewarm and state.prewarm.page_state %}
+                <span class="pill {{ 'warn' if state.prewarm.page_state.is_abnormal else 'ok' }}">{{ '异常页' if state.prewarm.page_state.is_abnormal else '正常' }}</span>
+              {% else %}
+                <span class="pill">未知</span>
+              {% endif %}
+            </div>
+            <div class="item">
+              <h4>写后校验</h4>
+              {% if state.write_verification %}
+                <span class="pill {{ 'ok' if state.write_verification.verified else 'bad' }}">{{ '已验证' if state.write_verification.verified else '未验证' }}</span>
+              {% else %}
+                <span class="pill">未知</span>
+              {% endif %}
+            </div>
+            <div class="item">
+              <h4>Flow2API API</h4>
+              {% if state.update_api_success %}
+                <span class="pill ok">{{ state.update_action or 'success' }}</span>
+              {% else %}
+                <span class="pill bad">失败</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:16px">
+        <div class="panel">
+          <h3>验证详情</h3>
+          <div class="kv">
+            <div>Flow2API 地址</div><div><code>{{ state.flow2api_url or cfg.flow2api_url }}</code></div>
+            <div>Flow2API Host</div><div>{{ state.flow2api_host or '—' }}</div>
+            <div>Token 邮箱</div><div>{{ state.token_email or (state.write_verification.email if state.write_verification else '—') }}</div>
+            <div>数据库路径</div><div><code>{{ state.write_verification.db_path if state.write_verification and state.write_verification.db_path else '—' }}</code></div>
+            <div>Token ID</div><div>{{ state.write_verification.token_id if state.write_verification and state.write_verification.token_id is not none else '—' }}</div>
+            <div>ST 指纹（当前）</div><div><code>{{ state.session_token_fingerprint or '—' }}</code></div>
+            <div>ST 指纹（库内）</div><div><code>{{ state.write_verification.stored_st_fingerprint if state.write_verification and state.write_verification.stored_st_fingerprint else '—' }}</code></div>
+            <div>指纹比对</div><div>{{ '一致' if state.write_verification and state.write_verification.verified else '未确认' }}</div>
+            <div>当前项目</div><div>{{ state.write_verification.current_project_name if state.write_verification and state.write_verification.current_project_name else '—' }}</div>
+            <div>项目 ID</div><div><code>{{ state.write_verification.current_project_id if state.write_verification and state.write_verification.current_project_id else '—' }}</code></div>
+            <div>尝试次数</div><div>{{ state.attempt_count if state.attempt_count else 1 }}</div>
+          </div>
+        </div>
         <div class="panel">
           <h3>最近一次 Flow2API 响应</h3>
           <div class="codebox">{{ state.update_body or '暂无返回内容。第一次成功刷新后，这里会显示 Flow2API 的响应。' }}</div>
         </div>
-        <div class="panel">
-          <h3>当前状态摘要</h3>
-          <div class="list">
-            <div class="item"><h4>这个服务现在在做什么？</h4><p>Daemon 会按照配置的间隔自动执行一次刷新。手动点击“立即刷新 Token”时，会立刻执行一次，不影响后续定时任务。</p></div>
-            <div class="item"><h4>什么时候需要你介入？</h4><p>只有两种情况：第一次安装、或者 Google 登录态失效。其他时间基本都不需要动它。</p></div>
-          </div>
-        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <h3>最近一次完整状态 JSON</h3>
+        <div class="codebox">{{ state }}</div>
       </div>
     </section>
 
@@ -126,7 +229,7 @@
       <div class="hero">
         <div>
           <h2>登录向导</h2>
-          <p>给第一次安装的用户准备的，尽量按“看一眼就会”的方式写。日常不需要反复操作这里。</p>
+          <p>首次安装、登录失效，或者仪表盘持续显示“页面异常 + 刷新失败”时，用这里重新登录。</p>
         </div>
         <div class="hero-actions">
           <form method="post" action="/action/launch-browser"><button class="btn btn-secondary" type="submit">🚀 启动登录浏览器</button></form>
@@ -140,7 +243,7 @@
         <div class="step"><div class="n">1</div><div><strong>启动登录浏览器</strong><p>点击上方“启动登录浏览器”。服务器上的 Chrome 会在虚拟桌面里启动，并打开 Google Labs Flow 页面。</p></div></div>
         <div class="step"><div class="n">2</div><div><strong>进入登录页面</strong><p>点击“进入登录页面”，你会看到嵌入式 noVNC 页面。直接在里面像普通浏览器一样点、输、登录就行。</p></div></div>
         <div class="step"><div class="n">3</div><div><strong>确认已经进入 labs.google</strong><p>登录成功后，确保浏览器停留在 Google Labs / Flow 页面。不要关掉这个浏览器窗口。</p></div></div>
-        <div class="step"><div class="n">4</div><div><strong>回到仪表盘点击“立即刷新 Token”</strong><p>如果看到最近结果变成 <code>成功</code>，说明登录态已经被正确同步进 Flow2API，后续就交给 daemon 自动维护。</p></div></div>
+        <div class="step"><div class="n">4</div><div><strong>回到仪表盘点击“立即刷新 Token”</strong><p>如果看到“写后校验通过”，说明登录态已经被正确同步进 Flow2API，后续就交给 daemon 自动维护。</p></div></div>
       </div>
     </section>
 
@@ -148,7 +251,7 @@
       <div class="hero">
         <div>
           <h2>配置</h2>
-          <p>这里放“真正需要填的东西”，并把最容易让人困惑的 Connection Token 解释清楚。</p>
+          <p>这里放真正会影响稳定性的参数，包括刷新周期、预热等待和连接配置。</p>
         </div>
       </div>
 
@@ -194,7 +297,7 @@
           <div class="field">
             <label>noVNC 地址</label>
             <input name="novnc_url" value="{{ cfg.get('novnc_url', '') }}">
-            <div class="hint">手机或外部设备访问时，这里不要填 <code>localhost</code>，应填服务器可访问地址，例如 <code>http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale</code>。</div>
+            <div class="hint">手机或外部设备访问时，这里不要填 <code>localhost</code>，应填服务器可访问地址。</div>
           </div>
           <button class="btn btn-primary" type="submit">💾 保存配置</button>
         </form>
@@ -205,7 +308,7 @@
       <div class="hero">
         <div>
           <h2>帮助 / 原理 / 稳定性</h2>
-          <p>把“它到底怎么工作”“会不会越跑越重”“需不需要定时重启”这些问题都说透。</p>
+          <p>这页解释它为什么比单纯“读 cookie -> 发请求”更稳，以及你该重点关注哪些状态。</p>
         </div>
       </div>
 
@@ -214,8 +317,8 @@
           <h3>工作原理</h3>
           <div class="list">
             <div class="item"><h4>1. 浏览器登录态留在宿主机</h4><p>Google Labs 的登录态保存在服务器上的 Chrome Profile 中，不塞进 Flow2API Docker 容器里。</p></div>
-            <div class="item"><h4>2. Host Agent 通过 CDP 附着到 Chrome</h4><p>不是读加密数据库，也不是装浏览器扩展，而是通过 Chrome 的远程调试接口读取运行中的 cookie。</p></div>
-            <div class="item"><h4>3. 读取到 session token 后推送回 Flow2API</h4><p>通过 Flow2API 已有的插件更新接口，把最新登录态同步进去。Connection Token 就是这一步的授权凭证。</p></div>
+            <div class="item"><h4>2. Host Agent 先预热页面再读 Cookie</h4><p>会先激活/打开 Flow 页面，等待页面状态稳定，再读取 <code>__Secure-next-auth.session-token</code>，减少拿到陈旧 ST 的概率。</p></div>
+            <div class="item"><h4>3. 推送回 Flow2API 后再回读数据库</h4><p>不是只看 HTTP 200，而是会直接核对 Flow2API 数据库里的 ST 指纹，确认真的写进去了。</p></div>
           </div>
         </div>
         <div class="panel">
@@ -225,11 +328,11 @@
             <div class="mini">Web UI 进程内存<strong>约 60MB</strong></div>
             <div class="mini">Daemon 进程内存<strong>很低</strong></div>
             <div class="mini">主要资源热点<strong>Chrome GPU/renderer</strong></div>
-            <div class="mini">优化方向<strong>禁用 GPU / 降低后台开销</strong></div>
+            <div class="mini">稳态策略<strong>预热 + 重试 + 校验</strong></div>
           </div>
           <div class="list" style="margin-top:12px">
-            <div class="item"><h4>会不会越用越大？</h4><p>理论上任何长期运行的浏览器都有积累开销的可能，尤其是在云服务器 + Xvfb 环境里。所以要把风险主要看作“Chrome 的长期稳定性”，而不是 Python 逻辑。</p></div>
-            <div class="item"><h4>需不需要每天定时重启？</h4><p><strong>可以做，而且是合理的防御性策略。</strong>如果你追求长期省心，可以加一个 systemd timer，每天低峰时段重启一次 browser/daemon/UI 服务，减少长期累积状态带来的偶发问题。</p></div>
+            <div class="item"><h4>会不会越用越大？</h4><p>理论上任何长期运行的浏览器都有积累开销的可能，尤其是在云服务器 + Xvfb 环境里。所以主要风险看作“Chrome 的长期稳定性”，而不是 Python 逻辑。</p></div>
+            <div class="item"><h4>需不需要每天定时重启？</h4><p><strong>可以做，而且合理。</strong>如果你追求长期省心，可以加一个 systemd timer，每天低峰时段重启一次 browser/daemon/UI 服务，减少长期累积状态带来的偶发问题。</p></div>
           </div>
         </div>
       </div>
@@ -237,9 +340,9 @@
       <div class="panel" style="margin-top:16px">
         <h3>推荐运维策略</h3>
         <div class="list">
-          <div class="item"><h4>普通用户默认策略</h4><p>刷新频率设置为 10–30 分钟；只有首次安装或登录失效时手动介入；其余时间交给 daemon 自动跑。</p></div>
-          <div class="item"><h4>追求稳定的策略</h4><p>额外加一个每天凌晨的重启计划，例如每日 04:30 重启一次 browser + daemon，可进一步减少长跑累积状态。</p></div>
-          <div class="item"><h4>异常排查顺序</h4><p>先看仪表盘结果 → 再看登录页是否仍处于 Google Labs 已登录状态 → 再确认 Flow2API Connection Token 是否一致。</p></div>
+          <div class="item"><h4>普通用户默认策略</h4><p>刷新频率设置为 10–30 分钟；预热等待 5 秒；失败自动重试一次；只有登录失效时手动介入。</p></div>
+          <div class="item"><h4>重点看什么</h4><p>最重要的是：<code>写后校验是否通过</code>、<code>页面是否异常</code>、<code>AT 过期时间是不是新的</code>。</p></div>
+          <div class="item"><h4>异常排查顺序</h4><p>先看“写后校验” → 再看“页面预热状态” → 再看“AT 过期时间” → 最后再考虑重新登录。</p></div>
         </div>
       </div>
     </section>

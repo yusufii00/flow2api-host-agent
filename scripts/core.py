@@ -1,9 +1,13 @@
+import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
 from shutil import which
+from typing import Optional
+from urllib.parse import urlparse
 
 try:
     import tomllib  # py311+
@@ -58,7 +62,7 @@ def _token_looks_like_url(token: str) -> bool:
     return token.startswith('http://') or token.startswith('https://') or '/api/plugin/update-token' in token
 
 
-def health_report(cfg: dict, status: dict | None = None, state: dict | None = None) -> dict:
+def health_report(cfg: dict, status: Optional[dict] = None, state: Optional[dict] = None) -> dict:
     status = status or {}
     state = state or read_json(cfg['state_file']) or {}
     chrome_ok = bool(status.get('chrome_running')) if 'chrome_running' in status else chrome_running(cfg['remote_debugging_port'])
@@ -107,23 +111,151 @@ def start_chrome(cfg: dict):
     return proc.pid
 
 
+def _normalize_url(url: str) -> str:
+    return (url or '').rstrip('/')
+
+
+def _classify_prewarm_url(url: Optional[str]) -> dict:
+    u = (url or '').lower()
+    abnormal_markers = [
+        'signin',
+        'error=callback',
+        '/api/auth/',
+        'accounts.google.com',
+    ]
+    is_abnormal = any(m in u for m in abnormal_markers)
+    return {
+        'url': url,
+        'is_abnormal': is_abnormal,
+        'reason': 'auth_redirect_or_error_page' if is_abnormal else 'ok',
+    }
+
+
+def _collect_cookies_and_st(browser):
+    cookies = []
+    for ctx in browser.contexts:
+        try:
+            cookies.extend(ctx.cookies())
+        except Exception:
+            pass
+    st = None
+    for c in cookies:
+        if c.get('name') == '__Secure-next-auth.session-token':
+            st = c.get('value')
+            break
+    return cookies, st
+
+
+def _find_candidate_page(browser, start_url: str):
+    start_url_n = _normalize_url(start_url)
+    start_host = urlparse(start_url).hostname or 'labs.google'
+
+    for ctx in browser.contexts:
+        try:
+            for page in ctx.pages:
+                try:
+                    page_url = page.url or ''
+                    if _normalize_url(page_url).startswith(start_url_n):
+                        return page, 'exact'
+                    host = urlparse(page_url).hostname or ''
+                    if host.endswith(start_host) or host.endswith('google.com'):
+                        return page, 'related'
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return None, 'none'
+
+
+def _soft_prewarm(browser, cfg: dict):
+    """Non-intrusive prewarm: do not force navigation unless necessary."""
+    start_url = cfg.get('start_url', 'https://labs.google/fx/vi/tools/flow')
+    settle_ms = int(cfg.get('prewarm_settle_ms', 5000))
+    page, mode = _find_candidate_page(browser, start_url)
+
+    if page is not None:
+        try:
+            page.wait_for_load_state('domcontentloaded', timeout=5000)
+        except Exception:
+            pass
+        time.sleep(max(0, settle_ms) / 1000.0)
+        page_url = getattr(page, 'url', None)
+    else:
+        page_url = None
+
+    return {
+        'strategy': 'soft',
+        'mode': mode,
+        'page_url': page_url,
+        'page_state': _classify_prewarm_url(page_url),
+        'settle_ms': settle_ms,
+        'context_count': len(browser.contexts),
+        'page_count': sum(len(ctx.pages) for ctx in browser.contexts),
+    }
+
+
+def _aggressive_prewarm(browser, cfg: dict):
+    """Fallback only when no ST is present: navigate/reload Flow page like the extension."""
+    start_url = cfg.get('start_url', 'https://labs.google/fx/vi/tools/flow')
+    settle_ms = int(cfg.get('prewarm_settle_ms', 5000))
+    nav_timeout_ms = int(cfg.get('prewarm_nav_timeout_ms', 45000))
+
+    chosen_page, mode = _find_candidate_page(browser, start_url)
+    contexts = list(browser.contexts)
+    if chosen_page is None:
+        if not contexts:
+            raise RuntimeError('No browser contexts available for prewarm')
+        chosen_page = contexts[0].new_page()
+        mode = 'created'
+        chosen_page.goto(start_url, wait_until='load', timeout=nav_timeout_ms)
+    else:
+        try:
+            chosen_page.bring_to_front()
+        except Exception:
+            pass
+        try:
+            chosen_page.goto(start_url, wait_until='load', timeout=nav_timeout_ms)
+            mode = mode + '+goto'
+        except Exception:
+            try:
+                chosen_page.reload(wait_until='load', timeout=nav_timeout_ms)
+                mode = mode + '+reload'
+            except Exception:
+                mode = mode + '+noop'
+
+    try:
+        chosen_page.wait_for_load_state('networkidle', timeout=min(nav_timeout_ms, 15000))
+    except Exception:
+        pass
+
+    time.sleep(max(0, settle_ms) / 1000.0)
+    page_url = getattr(chosen_page, 'url', None)
+    return {
+        'strategy': 'aggressive',
+        'mode': mode,
+        'page_url': page_url,
+        'page_state': _classify_prewarm_url(page_url),
+        'settle_ms': settle_ms,
+        'nav_timeout_ms': nav_timeout_ms,
+        'context_count': len(browser.contexts),
+        'page_count': sum(len(ctx.pages) for ctx in browser.contexts),
+    }
+
+
 def attach_and_get_st(cfg: dict):
     endpoint = f"http://127.0.0.1:{cfg['remote_debugging_port']}"
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp(endpoint)
-        cookies = []
-        for ctx in browser.contexts:
-            try:
-                cookies.extend(ctx.cookies())
-            except Exception:
-                pass
-        st = None
-        for c in cookies:
-            if c.get('name') == '__Secure-next-auth.session-token':
-                st = c.get('value')
-                break
+        soft_info = _soft_prewarm(browser, cfg)
+        cookies, st = _collect_cookies_and_st(browser)
+        prewarm_info = soft_info
+        if not st:
+            aggressive_info = _aggressive_prewarm(browser, cfg)
+            cookies, st = _collect_cookies_and_st(browser)
+            prewarm_info = aggressive_info
+            prewarm_info['fallback_from'] = 'soft'
         browser.close()
-        return st, cookies
+        return st, cookies, prewarm_info
 
 
 def update_flow2api(cfg: dict, session_token: str):
@@ -139,22 +271,180 @@ def update_flow2api(cfg: dict, session_token: str):
     return r.status_code, r.text
 
 
-def run_once(cfg: dict):
+def _mask_token(token: Optional[str], prefix: int = 8, suffix: int = 6):
+    if not token:
+        return None
+    if len(token) <= prefix + suffix + 3:
+        return token[:prefix] + '...'
+    return f"{token[:prefix]}...{token[-suffix:]}"
+
+
+def _token_fingerprint(token: Optional[str]):
+    if not token:
+        return None
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
+
+
+def _parse_update_body(body: str):
+    try:
+        return json.loads(body)
+    except Exception:
+        return None
+
+
+def _flow2api_host(url: str) -> Optional[str]:
+    try:
+        return (urlparse(url).hostname or '').strip().lower() or None
+    except Exception:
+        return None
+
+
+def _candidate_db_paths(cfg: dict):
+    candidates = []
+    explicit = cfg.get('flow2api_db_path')
+    if explicit:
+        candidates.append(explicit)
+    candidates.extend(['/opt/apps/flow2api/data/flow.db', '/app/data/flow.db'])
+    seen = set()
+    out = []
+    for p in candidates:
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def _verify_token_written_locally(cfg: dict, email: Optional[str], expected_st: Optional[str]):
+    if not email or not expected_st:
+        return {'available': False, 'verified': False, 'reason': 'missing_email_or_expected_token'}
+
+    last_error = None
+    for db_path in _candidate_db_paths(cfg):
+        p = Path(db_path)
+        if not p.exists():
+            last_error = f'db_not_found:{db_path}'
+            continue
+        try:
+            con = sqlite3.connect(str(p))
+            cur = con.cursor()
+            row = cur.execute(
+                'SELECT id, email, st, at_expires, is_active, current_project_id, current_project_name FROM tokens WHERE email = ? ORDER BY id DESC LIMIT 1',
+                (email,),
+            ).fetchone()
+            con.close()
+            if not row:
+                return {'available': True, 'verified': False, 'db_path': db_path, 'reason': 'email_not_found', 'email': email}
+            token_id, row_email, stored_st, at_expires, is_active, current_project_id, current_project_name = row
+            stored_fp = _token_fingerprint(stored_st)
+            expected_fp = _token_fingerprint(expected_st)
+            matched = stored_st == expected_st
+            return {
+                'available': True,
+                'verified': matched,
+                'db_path': db_path,
+                'token_id': token_id,
+                'email': row_email,
+                'is_active': bool(is_active),
+                'at_expires': at_expires,
+                'current_project_id': current_project_id,
+                'current_project_name': current_project_name,
+                'expected_st_fingerprint': expected_fp,
+                'stored_st_fingerprint': stored_fp,
+                'stored_st_masked': _mask_token(stored_st),
+                'reason': 'matched' if matched else 'st_mismatch',
+            }
+        except Exception as e:
+            last_error = repr(e)
+            continue
+
+    return {'available': False, 'verified': False, 'reason': last_error or 'verification_unavailable'}
+
+
+def _run_once_inner(cfg: dict):
     started = time.time()
-    st, cookies = attach_and_get_st(cfg)
+    st, cookies, prewarm_info = attach_and_get_st(cfg)
     result = {
         'time': int(started),
         'cookie_count': len(cookies),
         'has_session_token': bool(st),
         'remote_debugging_port': cfg['remote_debugging_port'],
+        'flow2api_url': cfg.get('flow2api_url'),
+        'flow2api_host': _flow2api_host(cfg.get('flow2api_url', '')),
+        'prewarm': prewarm_info,
     }
+
+    page_state = (prewarm_info or {}).get('page_state') or {}
+    strategy = (prewarm_info or {}).get('strategy')
+    if page_state.get('is_abnormal') and strategy == 'aggressive':
+        result['prewarm_warning'] = f"Aggressive prewarm landed on abnormal page: {page_state.get('url')}"
+    elif page_state.get('is_abnormal') and strategy == 'soft':
+        result['prewarm_warning'] = f"Observed abnormal page in browser, but soft mode did not force navigation: {page_state.get('url')}"
+
     if st:
+        result['session_token_masked'] = _mask_token(st)
+        result['session_token_fingerprint'] = _token_fingerprint(st)
         status, body = update_flow2api(cfg, st)
         result['update_status'] = status
-        result['update_body'] = body[:1000]
-        result['success'] = status == 200
+        result['update_body'] = body[:2000]
+
+        parsed_body = _parse_update_body(body)
+        if parsed_body is not None:
+            result['update_json'] = parsed_body
+            result['update_api_success'] = bool(parsed_body.get('success'))
+            result['update_action'] = parsed_body.get('action')
+            result['token_email'] = parsed_body.get('email') or parsed_body.get('token_email')
+            msg = parsed_body.get('message')
+            if isinstance(msg, str) and not result.get('token_email'):
+                marker = ' for '
+                if marker in msg:
+                    maybe_email = msg.split(marker, 1)[1].strip()
+                    if '@' in maybe_email:
+                        result['token_email'] = maybe_email
+        else:
+            result['update_api_success'] = False
+            result['update_parse_error'] = 'response_not_json'
+
+        verify = _verify_token_written_locally(cfg, result.get('token_email'), st)
+        result['write_verification'] = verify
+
+        api_ok = status == 200 and bool(result.get('update_api_success')) and result.get('update_action') in {'updated', 'added'}
+        if verify.get('available'):
+            result['success'] = bool(api_ok and verify.get('verified'))
+            if not result['success'] and api_ok and not verify.get('verified'):
+                result['error'] = f"Write verification failed: {verify.get('reason')}"
+        else:
+            result['success'] = bool(api_ok)
+            result['warning'] = f"API update succeeded but local verification unavailable: {verify.get('reason')}"
     else:
         result['success'] = False
         result['error'] = 'No session token found'
-    save_json(cfg['state_file'], result)
+
     return result
+
+
+def run_once(cfg: dict):
+    retry_count = int(cfg.get('retry_count', 1))
+    retry_delay_ms = int(cfg.get('retry_delay_ms', 3000))
+
+    attempts = []
+    final = None
+    for i in range(retry_count + 1):
+        result = _run_once_inner(cfg)
+        result['attempt'] = i + 1
+        attempts.append(dict(result))
+        final = dict(result)
+        if result.get('success'):
+            break
+        if i < retry_count:
+            time.sleep(max(0, retry_delay_ms) / 1000.0)
+
+    if final is None:
+        final = {'time': int(time.time()), 'success': False, 'error': 'No attempts executed'}
+
+    final['attempts'] = attempts
+    final['attempt_count'] = len(attempts)
+    if len(attempts) > 1:
+        final['retried'] = True
+
+    save_json(cfg['state_file'], final)
+    return final

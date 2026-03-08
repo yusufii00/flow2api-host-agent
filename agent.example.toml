@@ -8,6 +8,12 @@ start_url = "https://labs.google/fx/vi/tools/flow"
 refresh_interval_minutes = 30
 state_file = "/var/lib/flow2api-host-agent/state.json"
 log_file = "/var/log/flow2api-host-agent/chrome.log"
+# Optional: explicit local flow2api sqlite path for strong write verification.
+# If omitted, agent will try common local paths automatically.
+flow2api_db_path = "/opt/apps/flow2api/data/flow.db"
+# Prewarm the Flow page before reading cookies, to improve long-run stability.
+prewarm_settle_ms = 5000
+prewarm_nav_timeout_ms = 45000
 listen_host = "0.0.0.0"
 listen_port = 38110
 novnc_url = "http://YOUR_SERVER_IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"

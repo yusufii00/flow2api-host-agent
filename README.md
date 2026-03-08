@@ -24,14 +24,21 @@
 
 ---
 
-## 成熟版改进点
+## 当前版本的稳定性增强
 
-这个版本额外做了几件对生产更友好的事：
+这版重点不是“能跑”，而是**长期更稳地跑**：
 
+- **软预热优先（soft prewarm）**：优先复用当前浏览器中的有效登录态，不主动乱跳 Google 登录流
+- **激进兜底（aggressive fallback）**：只有拿不到 `session-token` 时，才会主动打开 / 刷新 Flow 页面
+- **写后强校验**：不再只看 `/api/plugin/update-token` 返回 200，而是会直接回读 Flow2API 数据库确认 ST 确实写入
+- **ST 指纹比对**：记录当前 ST 指纹和库内 ST 指纹，确认不是“看起来成功”
+- **异常页面告警**：如果预热后浏览器落到 `signin / accountchooser / callback error` 等页面，会在 state 和 UI 中明确标记
+- **失败自动重试**：默认失败会自动重试一次，降低偶发波动影响
+- **UI 可观测性增强**：仪表盘现在直接展示写后校验、页面状态、AT 过期时间、重试次数、指纹比对等关键信息
+- **每日低峰自愈重启**：支持每天低峰时间自动重启 Host Agent 服务，减少长期运行累积状态
 - **统一 Python 运行时**：Web UI / daemon / one-shot 命令全部走项目内 `.venv`
 - **新增健康检查**：提供 `/api/health`，把 Chrome、最近刷新、Connection Token 配置分层展示
 - **配置防呆**：阻止把 `Connection Token` 错填成 URL
-- **安装更稳**：`install-systemd.sh` 自动创建 `.venv` 并为 systemd 固定解释器路径
 - **日志更清晰**：Chrome 日志和 daemon 日志拆分
 
 ---
@@ -113,6 +120,9 @@ systemctl start flow2api-host-agent
 - 维护 Google Labs 登录浏览器 profile
 - 通过 Chrome DevTools Protocol 读取 `__Secure-next-auth.session-token`
 - 调用 Flow2API 的 `/api/plugin/update-token` 自动更新 token
+- **软预热优先**，避免频繁触发重新登录
+- **拿不到 ST 才走激进兜底**
+- **写后数据库回读校验**
 - 提供 Web UI（仪表盘 / 登录向导 / 配置 / 帮助）
 - 提供 `/api/status` 与 `/api/health`
 - 支持 systemd 常驻
@@ -158,6 +168,18 @@ http://127.0.0.1:38000/api/plugin/update-token
 - **配置**：修改 Flow2API 地址、Connection Token、noVNC 地址等
 - **帮助 / 原理 / 稳定性**：解释它怎么工作、会不会越跑越重、为什么建议维护性重启
 
+### 仪表盘现在会显示什么？
+
+- 最近结果是否成功
+- 写后校验是否通过
+- 当前 AT 过期时间
+- 页面预热是否异常
+- 当前预热策略（soft / aggressive）
+- 是否发生过重试
+- ST 指纹与库内指纹是否一致
+
+这意味着你看到的不再只是“HTTP 200”，而是**真正可用的成功证明**。
+
 ---
 
 ## API
@@ -183,17 +205,16 @@ http://127.0.0.1:38000/api/plugin/update-token
 如果你希望进一步降低 Chrome 长时间运行的累积状态问题，可以开启：
 
 ```bash
-systemctl enable --now flow2api-host-agent-daily-restart.timer
+systemctl enable --now flow2api-host-agent-selfheal.timer
 ```
 
 默认计划时间：
 
-- **每天 04:30 UTC**
+- **每天 20:20 UTC**（约等于北京时间 04:20）
 
 它会重启：
-- browser
-- daemon
-- ui
+- `flow2api-host-agent.service`
+- `flow2api-host-agent-ui.service`
 
 这是一个偏稳妥的长期运行策略。
 
@@ -229,21 +250,30 @@ novnc_url = "http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scal
 
 ## 常见问题
 
-### 1）页面显示 Chrome 未运行，但 daemon 明明在跑
+### 1）为什么有时会被带到 Google 登录页？
 
-旧版本可能出现这个问题，原因通常是：
+旧版预热逻辑过于激进，可能每次都主动碰 Google 登录流。
 
-- Web UI 用了系统 `python3` 调子命令
-- daemon 却跑在项目自己的虚拟环境里
-- 导致 UI 自检失败，但底层服务其实是好的
+新版已经调整为：
+- **默认 soft prewarm**：优先复用现有状态
+- **只有拿不到 ST 才 aggressive fallback**
 
-新版本已经统一为项目内 `.venv` 运行时，避免这类假失败。
+因此不会再动不动就要求重新登录。
 
-### 2）为什么会报 `Invalid connection token`
+### 2）什么才算真正成功？
+
+不是只看返回 200，而是要同时满足：
+
+- `/api/plugin/update-token` 返回成功
+- 能解析出业务成功结果
+- Flow2API 数据库回读成功
+- 当前 ST 指纹与库内 ST 指纹一致
+
+### 3）为什么会报 `Invalid connection token`？
 
 通常是因为你把 `Connection Token` 填成了 URL，而不是 token 字符串。
 
-### 3）怎么快速自检
+### 4）怎么快速自检？
 
 ```bash
 curl http://127.0.0.1:38110/api/health

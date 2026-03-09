@@ -88,25 +88,39 @@ def health_report(cfg: dict, status: Optional[dict] = None, state: Optional[dict
     }
 
 
-def start_chrome(cfg: dict):
-    Path(cfg['chrome_profile_dir']).mkdir(parents=True, exist_ok=True)
-    ensure_parent(cfg['log_file'])
-    log = open(cfg['log_file'], 'a', encoding='utf-8')
+def build_chrome_env(cfg: dict):
     env = os.environ.copy()
     env['DISPLAY'] = cfg['display']
-    env.setdefault('XDG_RUNTIME_DIR', '/tmp')
-    cmd = [
+    env.setdefault('XDG_RUNTIME_DIR', cfg.get('runtime_dir', '/var/lib/flow2api-host-agent/runtime'))
+    env.setdefault('HOME', cfg.get('home_dir', '/var/lib/flow2api-host-agent'))
+    return env
+
+
+def build_chrome_cmd(cfg: dict):
+    return [
         cfg['chrome_binary'],
         f"--remote-debugging-port={cfg['remote_debugging_port']}",
         f"--user-data-dir={cfg['chrome_profile_dir']}",
-        '--no-first-run', '--no-default-browser-check', '--no-sandbox',
-        '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer',
-        '--disable-background-networking', '--disable-default-apps',
-        '--disable-extensions', '--disable-sync', '--disable-translate',
-        '--metrics-recording-only', '--mute-audio', '--no-first-run',
-        '--safebrowsing-disable-auto-update',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--password-store=basic',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-session-crashed-bubble',
+        '--mute-audio',
         cfg['start_url'],
     ]
+
+
+def start_chrome(cfg: dict):
+    Path(cfg['chrome_profile_dir']).mkdir(parents=True, exist_ok=True)
+    runtime_dir = Path(cfg.get('runtime_dir', '/var/lib/flow2api-host-agent/runtime'))
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    ensure_parent(cfg['log_file'])
+    log = open(cfg['log_file'], 'a', encoding='utf-8')
+    env = build_chrome_env(cfg)
+    cmd = build_chrome_cmd(cfg)
     proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env)
     return proc.pid
 

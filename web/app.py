@@ -113,9 +113,13 @@ def api_status():
     return _run_cmd('status')
 
 
+def _restart_browser() -> None:
+    subprocess.run(['systemctl', 'restart', 'flow2api-host-agent-browser.service'], capture_output=True, text=True)
+
+
 @app.post('/action/launch-browser')
 def action_launch_browser():
-    _run_cmd('login')
+    _restart_browser()
     return RedirectResponse('/login', status_code=303)
 
 

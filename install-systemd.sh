@@ -6,6 +6,7 @@ set -euo pipefail
 INSTALL_DIR="${1:-/opt/flow2api-host-agent}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="$(command -v python3)"
+SERVICE_USER="muyouzhi"
 
 if [ -z "$PYTHON" ]; then
   echo "python3 not found" >&2
@@ -15,8 +16,6 @@ fi
 echo "==> Installing to: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 
-# Copy files
-
 echo "==> Copying files..."
 cp -r "$SCRIPT_DIR/scripts" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/web" "$INSTALL_DIR/"
@@ -24,8 +23,6 @@ cp -r "$SCRIPT_DIR/systemd" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/docs" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
 [ -f "$SCRIPT_DIR/agent.toml" ] && cp "$SCRIPT_DIR/agent.toml" "$INSTALL_DIR/" || cp "$SCRIPT_DIR/agent.example.toml" "$INSTALL_DIR/agent.toml"
-
-# Install Python dependencies into project-local venv
 
 echo "==> Creating virtual environment..."
 "$PYTHON" -m venv "$INSTALL_DIR/.venv"
@@ -36,41 +33,69 @@ echo "==> Installing Python dependencies..."
 "$VENV_PYTHON" -m pip install -U pip setuptools wheel >/dev/null
 "$VENV_PYTHON" -m pip install -q -r "$INSTALL_DIR/requirements.txt"
 
-# Ensure runtime directories
-mkdir -p /var/log/flow2api-host-agent
-mkdir -p /var/lib/flow2api-host-agent
+echo "==> Ensuring service user..."
+id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd -r -M -d /var/lib/flow2api-host-agent -s /usr/sbin/nologin "$SERVICE_USER"
 
-# Write browser launcher service
+mkdir -p /var/log/flow2api-host-agent
+mkdir -p /var/lib/flow2api-host-agent/profile
+mkdir -p /var/lib/flow2api-host-agent/runtime
+chmod 700 /var/lib/flow2api-host-agent/runtime
+
+chown -R "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR" /var/log/flow2api-host-agent /var/lib/flow2api-host-agent
+
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path("$INSTALL_DIR/agent.toml")
+text = p.read_text()
+updates = {
+    'runtime_dir': '/var/lib/flow2api-host-agent/runtime',
+    'home_dir': '/var/lib/flow2api-host-agent',
+}
+for k, v in updates.items():
+    if re.search(rf'^{k}\s*=.*$', text, flags=re.M):
+        text = re.sub(rf'^{k}\s*=.*$', f'{k} = "{v}"', text, flags=re.M)
+    else:
+        text += f'\n{k} = "{v}"\n'
+p.write_text(text)
+PY
+
 cat > /etc/systemd/system/flow2api-host-agent-browser.service << EOF
 [Unit]
-Description=Flow2API Host Agent - Chrome Browser Launcher
-After=network.target
+Description=Flow2API Host Agent Browser
+After=flow2api-host-agent-fluxbox.service
+Requires=flow2api-host-agent-fluxbox.service
 
 [Service]
-Type=oneshot
-User=root
+Type=simple
+User=$SERVICE_USER
 WorkingDirectory=$INSTALL_DIR
 Environment=DISPLAY=:99
+Environment=HOME=/var/lib/flow2api-host-agent
+Environment=XDG_RUNTIME_DIR=/var/lib/flow2api-host-agent/runtime
 Environment=PYTHONPATH=$INSTALL_DIR
-ExecStart=$VENV_PYTHON $INSTALL_DIR/scripts/agent.py --config $INSTALL_DIR/agent.toml login
-RemainAfterExit=no
+ExecStart=/bin/sh -lc 'exec /usr/bin/chromium --remote-debugging-port=9223 --user-data-dir=/var/lib/flow2api-host-agent/profile --no-first-run --no-default-browser-check --password-store=basic --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-session-crashed-bubble --mute-audio https://labs.google/fx/vi/tools/flow'
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Write daemon service
 cat > /etc/systemd/system/flow2api-host-agent.service << EOF
 [Unit]
 Description=Flow2API Host Agent - Token Auto Refresh Daemon
-After=network.target
+After=network.target flow2api-host-agent-fluxbox.service flow2api-host-agent-browser.service
+Requires=flow2api-host-agent-fluxbox.service flow2api-host-agent-browser.service
 
 [Service]
 Type=simple
-User=root
+User=$SERVICE_USER
 WorkingDirectory=$INSTALL_DIR
 Environment=PYTHONPATH=$INSTALL_DIR
 Environment=DISPLAY=:99
+Environment=HOME=/var/lib/flow2api-host-agent
+Environment=XDG_RUNTIME_DIR=/var/lib/flow2api-host-agent/runtime
 ExecStart=$VENV_PYTHON $INSTALL_DIR/scripts/agent.py --config $INSTALL_DIR/agent.toml daemon
 Restart=always
 RestartSec=15
@@ -81,7 +106,6 @@ StandardError=append:/var/log/flow2api-host-agent/daemon.log
 WantedBy=multi-user.target
 EOF
 
-# Write Web UI service
 cat > /etc/systemd/system/flow2api-host-agent-ui.service << EOF
 [Unit]
 Description=Flow2API Host Agent - Web UI
@@ -100,15 +124,12 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# Optional daily restart timer
 if [ -f "$INSTALL_DIR/systemd/flow2api-host-agent-daily-restart.service" ]; then
   cp "$INSTALL_DIR/systemd/flow2api-host-agent-daily-restart.service" /etc/systemd/system/
 fi
 if [ -f "$INSTALL_DIR/systemd/flow2api-host-agent-daily-restart.timer" ]; then
   cp "$INSTALL_DIR/systemd/flow2api-host-agent-daily-restart.timer" /etc/systemd/system/
 fi
-
-# Reload and enable
 
 echo "==> Enabling services..."
 systemctl daemon-reload
@@ -120,12 +141,13 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "Services installed:"
-echo "  flow2api-host-agent-browser  - browser launcher (oneshot)"
+echo "  flow2api-host-agent-browser  - browser launcher/service (non-root Chromium)"
 echo "  flow2api-host-agent          - token auto-refresh daemon"
 echo "  flow2api-host-agent-ui       - Web UI on port 38110"
 [ -f "$INSTALL_DIR/systemd/flow2api-host-agent-daily-restart.timer" ] && echo "  flow2api-host-agent-daily-restart.timer - optional daily maintenance restart"
 echo ""
 echo "Important:"
+echo "  - Chromium now runs as $SERVICE_USER with sandbox enabled (no --no-sandbox)"
 echo "  - Connection Token must be the token string from Flow2API plugin settings, not a URL"
 echo "  - novnc_url must use your SERVER IP/domain, not localhost, if accessed from another device"
 echo ""

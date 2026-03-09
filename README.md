@@ -28,6 +28,10 @@
 
 这版重点不是“能跑”，而是**长期更稳地跑**：
 
+- **非 root Chromium**：浏览器改为普通服务用户运行，降低 Google 登录风控敏感度
+- **移除 `--no-sandbox`**：不再使用会触发 Google 登录警告的启动参数
+- **browser service 托管化**：浏览器改由独立 systemd service 持续托管，不再是 oneshot 放飞子进程
+- **UI 按钮统一走 systemd**：登录页中的“重新启动浏览器”改为重启 browser service，避免脚本直拉浏览器导致状态不一致
 - **软预热优先（soft prewarm）**：优先复用当前浏览器中的有效登录态，不主动乱跳 Google 登录流
 - **激进兜底（aggressive fallback）**：只有拿不到 `session-token` 时，才会主动打开 / 刷新 Flow 页面
 - **写后强校验**：不再只看 `/api/plugin/update-token` 返回 200，而是会直接回读 Flow2API 数据库确认 ST 确实写入

